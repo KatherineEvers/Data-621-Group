@@ -1,0 +1,91 @@
+---
+title: "R Notebook"
+output:
+  html_document:
+    df_print: paged
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Cmd+Option+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Cmd+Shift+K* to preview the HTML file). 
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+```{r}
+library(dplyr)
+library(ggplot2)
+library(lattice)
+```
+
+### Load in train data
+```{r}
+train_data <- read.csv("../../../Data/Assignment_1/moneyball-training-data.csv")
+```
+
+### Observe subset of data
+```{r}
+head(train_data)
+```
+
+### Look at dimensions
+```{r}
+dim(train_data)
+```
+
+```{r}
+train_data %>%
+  summarise_all(list(~sum(is.na(.))))
+```
+
+### Check overall summary for each column
+```{r}
+summary(train_data)
+```
+
+### Look at correlation matrix for data with small amount of nulls
+```{r}
+library(reshape2)
+cor_matrix <- cor(train_data[c(2:9,12:16)][complete.cases(train_data[c(2:9,12:16)]),], method = c("pearson", "kendall", "spearman"))
+melted_data <- melt(cor_matrix)
+ggplot(data=melted_data, aes(x=Var1, y=Var2, fill=value)) + 
+  geom_tile() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  ylab("Variable 1") + 
+ xlab("Variable 2")
+```
+
+### Observe distribution of target variable
+```{r, fig.height=3, fig.width=5}
+ggplot(train_data, 
+       aes(x=TARGET_WINS)) + 
+ geom_histogram(aes(y=..density..,),
+                bins = 60,
+                binwidth = .5) +
+ geom_density(alpha=.2, fill='blue') +
+ ylab("Density") + 
+ xlab("Number of Wins")
+```
+
+The distribution looks fairly normal
+
+### Fit regression model to variables with few missing values. get rid of missning values.
+```{r}
+fit <- lm(formula = TARGET_WINS ~ ., data = train_data[c(2:9,12:16)][complete.cases(train_data[c(2:9,12:16)]),])
+summary(fit) # show result
+```
+
+### Check to see how many rows were retained
+```{r}
+ nrow(train_data[c(2:9,12:16)][complete.cases(train_data[c(2:9,12:16)]),])
+```
+
+### Analyze residuals
+```{r}
+library(ggfortify)
+autoplot(fit)
+```
+
+

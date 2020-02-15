@@ -88,4 +88,38 @@ library(ggfortify)
 autoplot(fit)
 ```
 
+```{r}
+library(DMwR)
+knnOutput <- knnImputation(train_data[c(2:9,12:16)])  # perform knn imputation.
+anyNA(knnOutput)
+```
+
+```{r}
+head(knnOutput,5)
+nrow(knnOutput)
+```
+
+```{r}
+fit_knn <- lm(formula = TARGET_WINS ~ ., data = knnOutput)
+summary(fit_knn) # show result
+```
+
+```{r}
+formula <- as.formula(paste(' TARGET_WINS ~ .^2 + ', paste('poly(',colnames(knnOutput[,!colnames(knnOutput) %in% 'TARGET_WINS']),',2, raw=TRUE)[, 2]', collapse = ' + ')))
+
+knnOutput_poly <- cbind(knnOutput$TARGET_WINS,
+                        data.frame(model.matrix(formula, data=knnOutput)))
+knnOutput_poly <- knnOutput_poly %>% 
+                    rename(
+                      TARGET_WINS = 'knnOutput$TARGET_WINS',
+                      INTERCEPT = 'X.Intercept.',
+                      ) 
+                  
+knnOutput_poly <- select(knnOutput_poly,-c(INTERCEPT))
+```
+
+```{r}
+fit_knn_poly <- lm(formula = 'TARGET_WINS ~ .',  data= knnOutput_poly)
+summary(fit_knn_poly) # show result
+```
 

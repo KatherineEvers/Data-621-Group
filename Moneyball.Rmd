@@ -1,0 +1,215 @@
+---
+title: "Moneyball"
+author: "Austin Chan"
+date: "February 14, 2020"
+output: html_document
+---
+
+```{r}
+library(tidyr)
+library(ggplot2)
+```
+
+
+```{r}
+train_raw = read.csv("moneyball-training-data.csv",stringsAsFactors = F)
+
+train = subset(train_raw, select = -c(INDEX,TEAM_BASERUN_CS,TEAM_BATTING_HBP))
+
+train
+```
+
+
+
+```{r}
+train %>%
+  gather() %>%
+  ggplot(aes(value)) +
+    facet_wrap(~key, scales = "free") +
+    geom_histogram()
+
+#skewed
+
+#TEAM_BATTING_3B
+#TEAM_FIELDING_E
+#TEAM_PITCHING_H
+#TEM_PITCHING_SO
+
+#bimodal
+
+#TEAM_BATTING_HR
+#TEAM_BATTING_SO
+#TEAM_PITCHING_HR
+```
+
+
+### Box-Cox
+
+```{r}
+library(MASS)
+```
+
+```{r}
+summary(train)
+```
+
+
+```{r}
+full_model_t = lm((TARGET_WINS^1.3 - 1)/1.3~., data = train)
+
+full_model = lm(TARGET_WINS~., data = train)
+
+summary(full_model)
+summary(full_model_t)
+```
+
+```{r}
+box = boxcox(full_model, lambda = seq(1,2,0.1))
+
+```
+
+```{r}
+#skewed
+
+#TEAM_BATTING_3B
+#TEAM_FIELDING_E
+#TEAM_PITCHING_H
+#TEM_PITCHING_SO
+
+#bimodal
+
+#TEAM_BATTING_HR
+#TEAM_BATTING_SO
+#TEAM_PITCHING_HR
+
+new_model = lm(TARGET_WINS~ TEAM_BATTING_2B + 
+                            TEAM_BATTING_3B +
+                            TEAM_BATTING_BB +
+                            TEAM_BASERUN_SB +
+                            TEAM_PITCHING_H +
+                            TEAM_PITCHING_BB + 
+                            TEAM_PITCHING_SO +
+                            TEAM_FIELDING_E +
+                            TEAM_FIELDING_DP,data = train)
+
+summary(new_model)
+```
+
+```{r}
+boxcox(new_model, lambda = seq(1,2,0.1))
+
+new_model_t = lm((TARGET_WINS^1.3 - 1)/1.3~ TEAM_BATTING_2B + 
+                            TEAM_BATTING_3B +
+                            TEAM_BATTING_BB +
+                            TEAM_BASERUN_SB +
+                            TEAM_PITCHING_H +
+                            TEAM_PITCHING_BB + 
+                            TEAM_PITCHING_SO +
+                            TEAM_FIELDING_E +
+                            TEAM_FIELDING_DP,data = train)
+```
+
+```{r}
+summary(new_model)
+
+summary(new_model_t)
+```
+
+
+
+```{r}
+plot(new_model$residuals)
+
+hist(new_model$residuals)
+
+
+qqnorm(new_model$residuals)
+qqline(new_model$residuals)
+```
+
+
+### Missing data
+
+```{r}
+library(mice)
+```
+
+```{r}
+train_raw = subset(train_raw, select = -c(INDEX))
+
+train_mice = mice(train_raw, m = 50, meth = "pmm", seed = 100)
+
+train_imputed = complete(train_mice,1)
+```
+
+```{r}
+imputed_full = lm(TARGET_WINS~., data = train_imputed)
+
+summary(imputed_full)
+
+
+imputed_full2 = with(train_mice, lm(TARGET_WINS~TEAM_BATTING_2B + 
+                            TEAM_BATTING_3B +
+                            TEAM_BATTING_BB +
+                            TEAM_BASERUN_SB +
+                            TEAM_PITCHING_H +
+                            TEAM_PITCHING_BB + 
+                            TEAM_PITCHING_SO +
+                            TEAM_FIELDING_E +
+                            TEAM_FIELDING_DP))
+
+summary(pool(imputed_full2))
+```
+
+```{r}
+new_model_imputed = lm(TARGET_WINS~ TEAM_BATTING_2B + 
+                            TEAM_BATTING_3B +
+                            TEAM_BATTING_BB +
+                            TEAM_BASERUN_SB +
+                            TEAM_PITCHING_H +
+                            TEAM_PITCHING_BB + 
+                            TEAM_PITCHING_SO +
+                            TEAM_FIELDING_E +
+                            TEAM_FIELDING_DP,data = train_imputed)
+
+summary(new_model_imputed)
+```
+
+```{r}
+
+```
+
+
+
+
+### Testing the data
+
+```{r}
+test_raw = read.csv("moneyball-evaluation-data.csv", stringsAsFactors = F)
+```
+
+```{r}
+test_raw
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

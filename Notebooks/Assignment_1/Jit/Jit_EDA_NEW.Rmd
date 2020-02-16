@@ -18,11 +18,14 @@ The preview shows you a rendered HTML copy of the contents of the editor. Conseq
 library(dplyr)
 library(ggplot2)
 library(lattice)
+library(caret)
+library(crossval)
 ```
 
 ### Load in train data
 ```{r}
 train_data <- read.csv("../../../Data/Assignment_1/moneyball-training-data.csv")
+test_data <- read.csv("../../../Data/Assignment_1/moneyball-evaluation-data.csv")
 ```
 
 ### Observe subset of data
@@ -105,21 +108,85 @@ summary(fit_knn) # show result
 ```
 
 ```{r}
-formula <- as.formula(paste(' TARGET_WINS ~ .^2 + ', paste('poly(',colnames(knnOutput[,!colnames(knnOutput) %in% 'TARGET_WINS']),',2, raw=TRUE)[, 2]', collapse = ' + ')))
+formula = TARGET_WINS ~ .^2
 
-knnOutput_poly <- cbind(knnOutput$TARGET_WINS,
+knnOutput_int <- cbind(knnOutput$TARGET_WINS,
                         data.frame(model.matrix(formula, data=knnOutput)))
-knnOutput_poly <- knnOutput_poly %>% 
-                    rename(
-                      TARGET_WINS = 'knnOutput$TARGET_WINS',
-                      INTERCEPT = 'X.Intercept.',
-                      ) 
+knnOutput_int <- knnOutput_int %>% 
+                        rename(
+                          TARGET_WINS = 'knnOutput$TARGET_WINS',
+                          INTERCEPT = 'X.Intercept.',
+                          ) 
                   
-knnOutput_poly <- select(knnOutput_poly,-c(INTERCEPT))
+knnOutput_int <- select(knnOutput_int,-c(INTERCEPT))
+
+fit_knn_int <- lm(formula = 'TARGET_WINS ~ .',  data= knnOutput_int)
+summary(fit_knn_int) # show result
 ```
 
 ```{r}
-fit_knn_poly <- lm(formula = 'TARGET_WINS ~ .',  data= knnOutput_poly)
-summary(fit_knn_poly) # show result
+formula <- as.formula(paste(' TARGET_WINS ~ .^2 + ', paste('poly(',colnames(knnOutput[,!colnames(knnOutput) %in% 'TARGET_WINS']),',2, raw=TRUE)[, 2]', collapse = ' + ')))
+
+knnOutput_poly_int <- cbind(knnOutput$TARGET_WINS,
+                        data.frame(model.matrix(formula, data=knnOutput)))
+knnOutput_poly_int <- knnOutput_poly_int %>% 
+                        rename(
+                          TARGET_WINS = 'knnOutput$TARGET_WINS',
+                          INTERCEPT = 'X.Intercept.',
+                          ) 
+                  
+knnOutput_poly_int <- select(knnOutput_poly_int,-c(INTERCEPT))
+
+fit_knn_poly_int <- lm(formula = 'TARGET_WINS ~ .',  data= knnOutput_poly_int)
+summary(fit_knn_poly_int) # show result
+```
+
+```{r}
+autoplot(fit_knn_poly_int)
+```
+
+```{r}
+train.control <- trainControl(method = "cv", 
+                              p = .8,
+                              number = 10)
+# Train the model 
+final_model <- train(TARGET_WINS ~ .,  data= knnOutput_poly_int, method = "lm",
+               trControl = train.control)
+# Summarize the results
+print(final_model)
+```
+
+
+```{r}
+head(test_data)
+```
+
+```{r}
+test_data %>%
+  summarise_all(list(~sum(is.na(.))))
+```
+
+```{r}
+knnOutput_test <- knnImputation(train_data[c(2:9,12:16)]) 
+knnOutput_test_poly_int <- cbind(knnOutput_test$TARGET_WINS,
+                                 data.frame(model.matrix(formula, data=knnOutput_test)))
+
+knnOutput_test_poly_int <- knnOutput_test_poly_int %>% 
+                            rename(
+                              TARGET_WINS = 'knnOutput_test$TARGET_WINS',
+                              INTERCEPT = 'X.Intercept.',
+                              ) 
+                  
+knnOutput_test_poly_int <- select(knnOutput_test_poly_int,-c(INTERCEPT))
+```
+
+
+```{r}
+
+knnOutput_test_poly_int_pred <- predict(final_model, knnOutput_test_poly_int,
+                                        interval = "prediction")
+
+test_result <- postResample(knnOutput_test$TARGET_WINS, knnOutput_test_poly_int_pred)
+test_result
 ```
 

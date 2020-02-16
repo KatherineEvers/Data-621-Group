@@ -50,6 +50,8 @@ Summary statistics for each independent variable are provided below.  The variab
 summary(train_data[3:17])
 ```
   
+Box plots with the mean denoted as a red circle are provided.  
+  
 The box plots of the batting variables show many outliers in Hits and Triples.  The spread on Home Runs is large.  
 ```{r eda-box1, echo = FALSE, warning = FALSE, message = FALSE}
 plot1 <- ggplot(train_data, aes(x= "", y=Hits)) + geom_boxplot()  + stat_summary(fun.y=mean,col = 'red',geom='point') + 
@@ -103,25 +105,27 @@ ggplot(data=melted_data, aes(x=Var1, y=Var2, fill=`Corr Coeff`)) +
   theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
   ylab("") +  xlab("") 
 ```
+  
+Scatter plots of Wins versus a few of the independent variables are hard to decipher due to the large amount of records.  The relationship between wins and hits, doubles, and walks looks to be positive linear, while the relationship between wins and errors appears to be negative linear.  
 
-
-
-
-### Fit regression model to variables with few missing values. get rid of missning values.
-```{r}
-fit <- lm(formula = Wins ~ ., data = train_data[c(2:9,12:16)][complete.cases(train_data[c(2:9,12:16)]),])
-summary(fit) # show result
+```{r eda-scatter, echo = FALSE, warning = FALSE, message = FALSE}
+par(mfcol = c(2,3)) 
+plot(Wins ~ Hits, data = train_data)
+plot(Wins ~ Doubles, data = train_data)
+plot(Wins ~ Triples, data = train_data)
+plot(Wins ~ `Home Runs`, data = train_data)
+plot(Wins ~ Walks, data = train_data)
+plot(Wins ~ Errors, data = train_data)
+par(mfcol = c(1,1)) 
 ```
 
-### Check to see how many rows were retained
-```{r}
- nrow(train_data[c(2:9,12:16)][complete.cases(train_data[c(2:9,12:16)]),])
-```
 
-### Analyze residuals
-```{r}
-library(ggfortify)
-autoplot(fit)
-```
+### 2. DATA PREPARATION  
+  
+### 3. BUILD MODELS  
+  
+### 4. SELECT MODELS  
+  
+  
 
 

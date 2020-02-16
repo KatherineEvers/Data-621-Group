@@ -51,7 +51,7 @@ summary(train_data)
 ### Look at correlation matrix for data with small amount of nulls
 ```{r}
 library(reshape2)
-cor_matrix <- cor(train_data[c(2:9,12:16)][complete.cases(train_data[c(2:9,12:16)]),], method = c("pearson", "kendall", "spearman"))
+cor_matrix <- cor(train_data[c(2:9,12:17)][complete.cases(train_data[c(2:9,12:17)]),], method = c("pearson", "kendall", "spearman"))
 melted_data <- melt(cor_matrix)
 ggplot(data=melted_data, aes(x=Var1, y=Var2, fill=value)) + 
   geom_tile() +
@@ -76,13 +76,13 @@ The distribution looks fairly normal
 
 ### Fit regression model to variables with few missing values. get rid of missning values.
 ```{r}
-fit <- lm(formula = TARGET_WINS ~ ., data = train_data[c(2:9,12:16)][complete.cases(train_data[c(2:9,12:16)]),])
+fit <- lm(formula = TARGET_WINS ~ ., data = train_data[c(2:9,12:17)][complete.cases(train_data[c(2:9,12:17)]),])
 summary(fit) # show result
 ```
 
 ### Check to see how many rows were retained
 ```{r}
- nrow(train_data[c(2:9,12:16)][complete.cases(train_data[c(2:9,12:16)]),])
+ nrow(train_data[c(2:9,12:17)][complete.cases(train_data[c(2:9,12:17)]),])
 ```
 
 ### Analyze residuals
@@ -93,7 +93,7 @@ autoplot(fit)
 
 ```{r}
 library(DMwR)
-knnOutput <- knnImputation(train_data[c(2:9,12:16)])  # perform knn imputation.
+knnOutput <- knnImputation(train_data[c(2:9,12:17)])  # perform knn imputation.
 anyNA(knnOutput)
 ```
 
@@ -167,26 +167,22 @@ test_data %>%
 ```
 
 ```{r}
-knnOutput_test <- knnImputation(train_data[c(2:9,12:16)]) 
-knnOutput_test_poly_int <- cbind(knnOutput_test$TARGET_WINS,
-                                 data.frame(model.matrix(formula, data=knnOutput_test)))
-
-knnOutput_test_poly_int <- knnOutput_test_poly_int %>% 
-                            rename(
-                              TARGET_WINS = 'knnOutput_test$TARGET_WINS',
-                              INTERCEPT = 'X.Intercept.',
-                              ) 
-                  
-knnOutput_test_poly_int <- select(knnOutput_test_poly_int,-c(INTERCEPT))
+summary(test_data)
 ```
 
 
 ```{r}
+knnOutput_test <- knnImputation(test_data[c(2:8,11:16)]) 
+summary(knnOutput_test)
+```
 
+
+```{r}
+knnOutput_test$TARGET_WINS <- 'NA'
+knnOutput_test_poly_int <- data.frame(model.matrix(formula, data=knnOutput_test))
 knnOutput_test_poly_int_pred <- predict(final_model, knnOutput_test_poly_int,
                                         interval = "prediction")
 
-test_result <- postResample(knnOutput_test$TARGET_WINS, knnOutput_test_poly_int_pred)
-test_result
+knnOutput_test_poly_int_pred
 ```
 

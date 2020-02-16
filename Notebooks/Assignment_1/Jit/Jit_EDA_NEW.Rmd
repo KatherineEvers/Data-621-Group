@@ -1,0 +1,188 @@
+---
+title: "R Notebook"
+output:
+  html_document:
+    df_print: paged
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Cmd+Option+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Cmd+Shift+K* to preview the HTML file). 
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+```{r}
+library(dplyr)
+library(ggplot2)
+library(lattice)
+library(caret)
+library(crossval)
+```
+
+### Load in train data
+```{r}
+train_data <- read.csv("../../../Data/Assignment_1/moneyball-training-data.csv")
+test_data <- read.csv("../../../Data/Assignment_1/moneyball-evaluation-data.csv")
+```
+
+### Observe subset of data
+```{r}
+head(train_data)
+```
+
+### Look at dimensions
+```{r}
+dim(train_data)
+```
+
+```{r}
+train_data %>%
+  summarise_all(list(~sum(is.na(.))))
+```
+
+### Check overall summary for each column
+```{r}
+summary(train_data)
+```
+
+### Look at correlation matrix for data with small amount of nulls
+```{r}
+library(reshape2)
+cor_matrix <- cor(train_data[c(2:9,12:17)][complete.cases(train_data[c(2:9,12:17)]),], method = c("pearson", "kendall", "spearman"))
+melted_data <- melt(cor_matrix)
+ggplot(data=melted_data, aes(x=Var1, y=Var2, fill=value)) + 
+  geom_tile() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  ylab("Variable 1") + 
+ xlab("Variable 2")
+```
+
+### Observe distribution of target variable
+```{r, fig.height=3, fig.width=5}
+ggplot(train_data, 
+       aes(x=TARGET_WINS)) + 
+ geom_histogram(aes(y=..density..,),
+                bins = 60,
+                binwidth = .5) +
+ geom_density(alpha=.2, fill='blue') +
+ ylab("Density") + 
+ xlab("Number of Wins")
+```
+
+The distribution looks fairly normal
+
+### Fit regression model to variables with few missing values. get rid of missning values.
+```{r}
+fit <- lm(formula = TARGET_WINS ~ ., data = train_data[c(2:9,12:17)][complete.cases(train_data[c(2:9,12:17)]),])
+summary(fit) # show result
+```
+
+### Check to see how many rows were retained
+```{r}
+ nrow(train_data[c(2:9,12:17)][complete.cases(train_data[c(2:9,12:17)]),])
+```
+
+### Analyze residuals
+```{r}
+library(ggfortify)
+autoplot(fit)
+```
+
+```{r}
+library(DMwR)
+knnOutput <- knnImputation(train_data[c(2:9,12:17)])  # perform knn imputation.
+anyNA(knnOutput)
+```
+
+```{r}
+head(knnOutput,5)
+nrow(knnOutput)
+```
+
+```{r}
+fit_knn <- lm(formula = TARGET_WINS ~ ., data = knnOutput)
+summary(fit_knn) # show result
+```
+
+```{r}
+formula = TARGET_WINS ~ .^2
+
+knnOutput_int <- cbind(knnOutput$TARGET_WINS,
+                        data.frame(model.matrix(formula, data=knnOutput)))
+knnOutput_int <- knnOutput_int %>% 
+                        rename(
+                          TARGET_WINS = 'knnOutput$TARGET_WINS',
+                          INTERCEPT = 'X.Intercept.',
+                          ) 
+                  
+knnOutput_int <- select(knnOutput_int,-c(INTERCEPT))
+
+fit_knn_int <- lm(formula = 'TARGET_WINS ~ .',  data= knnOutput_int)
+summary(fit_knn_int) # show result
+```
+
+```{r}
+formula <- as.formula(paste(' TARGET_WINS ~ .^2 + ', paste('poly(',colnames(knnOutput[,!colnames(knnOutput) %in% 'TARGET_WINS']),',2, raw=TRUE)[, 2]', collapse = ' + ')))
+
+knnOutput_poly_int <- cbind(knnOutput$TARGET_WINS,
+                        data.frame(model.matrix(formula, data=knnOutput)))
+knnOutput_poly_int <- knnOutput_poly_int %>% 
+                        rename(
+                          TARGET_WINS = 'knnOutput$TARGET_WINS',
+                          INTERCEPT = 'X.Intercept.',
+                          ) 
+                  
+knnOutput_poly_int <- select(knnOutput_poly_int,-c(INTERCEPT))
+
+fit_knn_poly_int <- lm(formula = 'TARGET_WINS ~ .',  data= knnOutput_poly_int)
+summary(fit_knn_poly_int) # show result
+```
+
+```{r}
+autoplot(fit_knn_poly_int)
+```
+
+```{r}
+train.control <- trainControl(method = "cv", 
+                              p = .8,
+                              number = 10)
+# Train the model 
+final_model <- train(TARGET_WINS ~ .,  data= knnOutput_poly_int, method = "lm",
+               trControl = train.control)
+# Summarize the results
+print(final_model)
+```
+
+
+```{r}
+head(test_data)
+```
+
+```{r}
+test_data %>%
+  summarise_all(list(~sum(is.na(.))))
+```
+
+```{r}
+summary(test_data)
+```
+
+
+```{r}
+knnOutput_test <- knnImputation(test_data[c(2:8,11:16)]) 
+summary(knnOutput_test)
+```
+
+
+```{r}
+knnOutput_test$TARGET_WINS <- 'NA'
+knnOutput_test_poly_int <- data.frame(model.matrix(formula, data=knnOutput_test))
+knnOutput_test_poly_int_pred <- predict(final_model, knnOutput_test_poly_int,
+                                        interval = "prediction")
+
+knnOutput_test_poly_int_pred
+```
+

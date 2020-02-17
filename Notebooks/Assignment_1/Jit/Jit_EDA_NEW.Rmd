@@ -146,6 +146,11 @@ autoplot(fit_knn_poly_int)
 ```
 
 ```{r}
+ncol(knnOutput_poly_int)
+```
+
+
+```{r}
 train.control <- trainControl(method = "cv", 
                               p = .8,
                               number = 10)
@@ -154,6 +159,32 @@ final_model <- train(TARGET_WINS ~ .,  data= knnOutput_poly_int, method = "lm",
                trControl = train.control)
 # Summarize the results
 print(final_model)
+```
+
+
+```{r}
+# Train the model
+step.model <- train(TARGET_WINS ~ ., data = knnOutput_poly_int,
+                    method = "leapBackward", 
+                    tuneGrid = data.frame(nvmax = 5:ncol(knnOutput_poly_int)),
+                    trControl = train.control
+                    )
+step.model$results[as.numeric(step.model$bestTune),]
+```
+
+```{r}
+knnOutput_new_cols <- colnames(knnOutput_poly_int[colnames(knnOutput_poly_int) %in% rownames(as.matrix(coef(step.model$finalModel, 
+                                                                                      as.numeric(step.model$bestTune))))])
+refined_formula <- as.formula(paste(' TARGET_WINS ~ ', paste(knnOutput_new_cols, collapse = ' + ')))
+refined_formula
+```
+
+```{r}
+# Train the model 
+refined_model <- train(refined_formula,  data=knnOutput_poly_int, method = "lm",
+                       trControl = train.control)
+# Summarize the results
+print(refined_model)
 ```
 
 

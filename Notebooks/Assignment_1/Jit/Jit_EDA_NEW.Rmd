@@ -20,6 +20,7 @@ library(ggplot2)
 library(lattice)
 library(caret)
 library(crossval)
+library(mice)
 ```
 
 ### Load in train data
@@ -108,10 +109,10 @@ summary(fit_knn) # show result
 ```
 
 ```{r}
-formula = TARGET_WINS ~ .^2
+formula_int = TARGET_WINS ~ .^2
 
 knnOutput_int <- cbind(knnOutput$TARGET_WINS,
-                        data.frame(model.matrix(formula, data=knnOutput)))
+                        data.frame(model.matrix(formula_int, data=knnOutput)))
 knnOutput_int <- knnOutput_int %>% 
                         rename(
                           TARGET_WINS = 'knnOutput$TARGET_WINS',
@@ -125,10 +126,10 @@ summary(fit_knn_int) # show result
 ```
 
 ```{r}
-formula <- as.formula(paste(' TARGET_WINS ~ .^2 + ', paste('poly(',colnames(knnOutput[,!colnames(knnOutput) %in% 'TARGET_WINS']),',2, raw=TRUE)[, 2]', collapse = ' + ')))
+formula_int_poly <- as.formula(paste(' TARGET_WINS ~ .^2 + ', paste('poly(',colnames(knnOutput[,!colnames(knnOutput) %in% 'TARGET_WINS']),',2, raw=TRUE)[, 2]', collapse = ' + ')))
 
 knnOutput_poly_int <- cbind(knnOutput$TARGET_WINS,
-                        data.frame(model.matrix(formula, data=knnOutput)))
+                        data.frame(model.matrix(formula_int_poly, data=knnOutput)))
 knnOutput_poly_int <- knnOutput_poly_int %>% 
                         rename(
                           TARGET_WINS = 'knnOutput$TARGET_WINS',
@@ -146,6 +147,11 @@ autoplot(fit_knn_poly_int)
 ```
 
 ```{r}
+ncol(knnOutput_poly_int)
+```
+
+
+```{r}
 train.control <- trainControl(method = "cv", 
                               p = .8,
                               number = 10)
@@ -154,6 +160,32 @@ final_model <- train(TARGET_WINS ~ .,  data= knnOutput_poly_int, method = "lm",
                trControl = train.control)
 # Summarize the results
 print(final_model)
+```
+
+
+```{r}
+# Train the model
+step_model <- train(TARGET_WINS ~ ., data = knnOutput_poly_int,
+                    method = "leapBackward", 
+                    tuneGrid = data.frame(nvmax = 5:ncol(knnOutput_poly_int)),
+                    trControl = train.control
+                    )
+step_model$results[as.numeric(step_model$bestTune),]
+```
+
+```{r}
+knnOutput_new_cols <- colnames(knnOutput_poly_int[colnames(knnOutput_poly_int) %in% rownames(as.matrix(coef(step.model$finalModel, 
+                                                                                      as.numeric(step.model$bestTune))))])
+refined_formula <- as.formula(paste(' TARGET_WINS ~ ', paste(knnOutput_new_cols, collapse = ' + ')))
+refined_formula
+```
+
+```{r}
+# Train the model 
+refined_model <- train(refined_formula,  data=knnOutput_poly_int, method = "lm",
+                       trControl = train.control)
+# Summarize the results
+print(refined_model)
 ```
 
 
@@ -179,10 +211,81 @@ summary(knnOutput_test)
 
 ```{r}
 knnOutput_test$TARGET_WINS <- 'NA'
-knnOutput_test_poly_int <- data.frame(model.matrix(formula, data=knnOutput_test))
-knnOutput_test_poly_int_pred <- predict(final_model, knnOutput_test_poly_int,
+knnOutput_test_poly_int <- data.frame(model.matrix(formula_int_poly, data=knnOutput_test))
+knnOutput_test_poly_int_pred <- predict(refined_model, knnOutput_test_poly_int,
                                         interval = "prediction")
 
-knnOutput_test_poly_int_pred
+knnOutput_test$TARGET_WINS <- knnOutput_test_poly_int_pred
+knnOutput_test$TARGET_WINS
+```
+
+```{r}
+mice_train_Temp <- mice(train_data[c(2:9,12:17)], 
+                   m=5, 
+                   maxit=50, 
+                   meth='pmm',
+                   seed=500,
+                   printFlag=FALSE)  # perform mice imputation.
+
+mice_train_Output <- complete(mice_train_Temp ,1)
+anyNA(mice_train_Output)
+```
+
+```{r}
+mice_test_Temp <-  mice(test_data[c(2:8,11:16)],
+                   m=5, 
+                   maxit=50, 
+                   meth='pmm',
+                   seed=500,
+                   printFlag=FALSE)  # perform mice imputation.
+
+mice_test_Output <- complete(mice_test_Temp ,1)
+anyNA(mice_test_Output)
+```
+
+```{r}
+fit_mice <- lm(formula = TARGET_WINS ~ ., data = mice_train_Output)
+summary(fit_mice) # show result
+```
+
+```{r}
+
+mice_train_Output_int_poly <- cbind(mice_train_Output$TARGET_WINS,
+                        data.frame(model.matrix(formula_int_poly, data=mice_train_Output)))
+
+mice_train_Output_int_poly <- mice_train_Output_int_poly %>% 
+                        rename(
+                          TARGET_WINS = 'mice_train_Output$TARGET_WINS',
+                          INTERCEPT = 'X.Intercept.',
+                          ) 
+                  
+mice_train_Output_int_poly <- select(mice_train_Output_int_poly,-c(INTERCEPT))
+
+fit_mice_int <- lm(formula = 'TARGET_WINS ~ .',  data=mice_train_Output_int_poly)
+summary(fit_mice_int) # show result
+```
+
+```{r}
+# Train the model
+step_mice_model <- train(TARGET_WINS ~ ., data = mice_train_Output_int_poly,
+                    method = "leapBackward", 
+                    tuneGrid = data.frame(nvmax = 5:ncol(mice_train_Output_int_poly)),
+                    trControl = train.control
+                    )
+step_mice_model$results[as.numeric(step_mice_model$bestTune),]
+
+
+miceOutput_new_cols <- colnames(mice_train_Output_int_poly[colnames(mice_train_Output_int_poly) %in% rownames(as.matrix(coef(step_mice_model$finalModel, 
+                                                                                      as.numeric(step.model$bestTune))))])
+refined_mice_formula <- as.formula(paste(' TARGET_WINS ~ ', paste(miceOutput_new_cols, collapse = ' + ')))
+refined_mice_formula
+```
+
+```{r}
+# Train the model 
+refined_mice_model <- train(refined_mice_formula,  data=mice_train_Output_int_poly, method = "lm",
+                       trControl = train.control)
+# Summarize the results
+print(refined_mice_model)
 ```
 

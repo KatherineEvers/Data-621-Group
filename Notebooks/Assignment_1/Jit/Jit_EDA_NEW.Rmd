@@ -1,0 +1,332 @@
+---
+title: "R Notebook"
+output:
+  html_document:
+    df_print: paged
+---
+
+# Introduction
+
+There are many statistics in baseball, each with their own theoretical effect on the performance of a baseball team. While each statistic describe a different aspect of a baseball team, it is not entirely clear which statistics contribute the most towards the bottom line, winning. The goal of this project is to build a linear regression model to best predict the number of wins for a professional baseball team. 
+
+### Loading Packages
+
+The R packages we will be using for this project are as follows:
+
+- dplyr: data manipulation
+- ggplot2: data visualizaion
+- lattice: data visualization
+- caret: model building
+- crossval: model cross validation
+- mice: missing value imputation
+- reshape2: data manipulation
+- ggfortify: residual analysis
+- DMwR: missing value imputation
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(lattice)
+library(caret)
+library(crossval)
+library(mice)
+library(reshape2)
+library(ggfortify)
+library(DMwR)
+```
+
+
+### Load in train data
+
+```{r}
+train_data <- read.csv("../../../Data/Assignment_1/moneyball-training-data.csv")
+test_data <- read.csv("../../../Data/Assignment_1/moneyball-evaluation-data.csv")
+```
+
+### Observe subset of data
+
+Looking at the data, we can see that most of the rows are filled in, however, there are definitely missing values that need to be addressed.
+
+```{r}
+head(train_data)
+```
+
+### Look at dimensions
+```{r}
+dim(train_data)
+```
+
+While some columns only have a few missing values, TEAM_BASERUN_CS (caught stealing) and TEAM_BATTING_HBP (batters hit by pitch) have significantly more missing values. 
+
+```{r}
+train_data %>%
+  summarise_all(list(~sum(is.na(.))))
+```
+
+### Check overall summary for each column
+
+#Consider putting boxplots here
+
+```{r}
+summary(train_data)
+```
+
+### Look at correlation matrix for data with small amount of nulls
+```{r}
+
+cor_matrix <- cor(train_data[c(2:9,12:17)][complete.cases(train_data[c(2:9,12:17)]),], method = c("pearson", "kendall", "spearman"))
+melted_data <- melt(cor_matrix)
+ggplot(data=melted_data, aes(x=Var1, y=Var2, fill=value)) + 
+  geom_tile() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  ylab("Variable 1") + 
+ xlab("Variable 2")
+```
+
+### Observe distribution of target variable
+
+Target wins appears to be normally distributed. There may be some value to a Box-Cox transformation, but the impact will probably be negligible given that the variable is normally distributed.
+
+```{r, fig.height=3, fig.width=5}
+ggplot(train_data, 
+       aes(x=TARGET_WINS)) + 
+ geom_histogram(aes(y=..density..,),
+                bins = 60,
+                binwidth = .5) +
+ geom_density(alpha=.2, fill='blue') +
+ ylab("Density") + 
+ xlab("Number of Wins")
+```
+
+
+### Fit regression model to variables with few missing values. get rid of missning values.
+
+Our first attempt was to fit a model excluding the variables with a large proportion of missing values. This model includes every variable except for INDEX, TEAM_BATTING_HBP, and TEAM_BASERUN_CS. There were no transformations made to this model nor was normalization applied. The purpose of this model is to establish a baseline to test against future models.
+
+```{r}
+fit <- lm(formula = TARGET_WINS ~ ., data = train_data[c(2:9,12:17)][complete.cases(train_data[c(2:9,12:17)]),])
+summary(fit) # show result
+```
+
+### Check to see how many rows were retained
+
+Despite excluding those three columns, over 800 rows were removed from other columns that had missing values. Given that the dataset has over 2700 rows, a loss of 800 rows is very significant and will have a massive impact on the model.
+
+```{r}
+ nrow(train_data[c(2:9,12:17)][complete.cases(train_data[c(2:9,12:17)]),])
+```
+
+### Analyze residuals
+
+Looking at the residuals, we can see that the residuals are fairly normally distributed with no discernible pattern. The variance is mostly constant and there does not appear to be many outliers that exhibit a high degree of leverage. Overall, the fit is good.
+
+```{r}
+autoplot(fit)
+```
+
+### KNN Imputation
+
+Given that there are so many missing values, we wanted to find a way to impute the missing values so that we could use every bit of data in the dataset. Our first attempt involved using the K-nearest neighbors imputation method. We used this method because it does not rely on any assumptions about the distribution of the varaibles and is relatively straightforward in its implementation. This particular function auto-normalizes the data, which is convenient.
+
+```{r}
+knnOutput <- knnImputation(train_data[c(2:9,12:17)])  # perform knn imputation.
+anyNA(knnOutput)
+```
+
+Imputation was successful.
+
+```{r}
+head(knnOutput,5)
+nrow(knnOutput)
+```
+
+### Fitting a model after KNN imputation
+
+Now that the missing values have been imputed with KNN, we reran the model on the new dataset. As we can see from the output below, imputing the data has made the fit worse when including all the variables in the model. It is possible that the imputed rows added more bias to the model since imputation tends towards the average. While the R-squared is worse, it is also possible that this model has better predictive power compared to the previous model.
+
+```{r}
+fit_knn <- lm(formula = TARGET_WINS ~ ., data = knnOutput)
+summary(fit_knn) # show result
+```
+
+```{r}
+formula_int = TARGET_WINS ~ .^2
+
+knnOutput_int <- cbind(knnOutput$TARGET_WINS,
+                        data.frame(model.matrix(formula_int, data=knnOutput)))
+knnOutput_int <- knnOutput_int %>% 
+                        rename(
+                          TARGET_WINS = 'knnOutput$TARGET_WINS',
+                          INTERCEPT = 'X.Intercept.',
+                          ) 
+                  
+knnOutput_int <- select(knnOutput_int,-c(INTERCEPT))
+
+fit_knn_int <- lm(formula = 'TARGET_WINS ~ .',  data= knnOutput_int)
+summary(fit_knn_int) # show result
+```
+
+```{r}
+formula_int_poly <- as.formula(paste(' TARGET_WINS ~ .^2 + ', paste('poly(',colnames(knnOutput[,!colnames(knnOutput) %in% 'TARGET_WINS']),',2, raw=TRUE)[, 2]', collapse = ' + ')))
+
+knnOutput_poly_int <- cbind(knnOutput$TARGET_WINS,
+                        data.frame(model.matrix(formula_int_poly, data=knnOutput)))
+knnOutput_poly_int <- knnOutput_poly_int %>% 
+                        rename(
+                          TARGET_WINS = 'knnOutput$TARGET_WINS',
+                          INTERCEPT = 'X.Intercept.',
+                          ) 
+                  
+knnOutput_poly_int <- select(knnOutput_poly_int,-c(INTERCEPT))
+
+fit_knn_poly_int <- lm(formula = 'TARGET_WINS ~ .',  data= knnOutput_poly_int)
+summary(fit_knn_poly_int) # show result
+```
+
+```{r}
+autoplot(fit_knn_poly_int)
+```
+
+```{r}
+ncol(knnOutput_poly_int)
+```
+
+
+```{r}
+train.control <- trainControl(method = "cv", 
+                              p = .8,
+                              number = 10)
+# Train the model 
+final_model <- train(TARGET_WINS ~ .,  data= knnOutput_poly_int, method = "lm",
+               trControl = train.control)
+# Summarize the results
+print(final_model)
+```
+
+
+```{r}
+# Train the model
+step_model <- train(TARGET_WINS ~ ., data = knnOutput_poly_int,
+                    method = "leapBackward", 
+                    tuneGrid = data.frame(nvmax = 5:ncol(knnOutput_poly_int)),
+                    trControl = train.control
+                    )
+step_model$results[as.numeric(step_model$bestTune),]
+```
+
+```{r}
+knnOutput_new_cols <- colnames(knnOutput_poly_int[colnames(knnOutput_poly_int) %in% rownames(as.matrix(coef(step_model$finalModel, 
+                                                                                      as.numeric(step_model$bestTune))))])
+refined_formula <- as.formula(paste(' TARGET_WINS ~ ', paste(knnOutput_new_cols, collapse = ' + ')))
+refined_formula
+```
+
+```{r}
+# Train the model 
+refined_model <- train(refined_formula,  data=knnOutput_poly_int, method = "lm",
+                       trControl = train.control)
+# Summarize the results
+print(refined_model)
+```
+
+
+```{r}
+head(test_data)
+```
+
+```{r}
+test_data %>%
+  summarise_all(list(~sum(is.na(.))))
+```
+
+```{r}
+summary(test_data)
+```
+
+
+```{r}
+knnOutput_test <- knnImputation(test_data[c(2:8,11:16)]) 
+summary(knnOutput_test)
+```
+
+
+```{r}
+knnOutput_test$TARGET_WINS <- 'NA'
+knnOutput_test_poly_int <- data.frame(model.matrix(formula_int_poly, data=knnOutput_test))
+knnOutput_test_poly_int_pred <- predict(refined_model, knnOutput_test_poly_int,
+                                        interval = "prediction")
+
+knnOutput_test$TARGET_WINS <- knnOutput_test_poly_int_pred
+knnOutput_test$TARGET_WINS
+```
+
+```{r}
+mice_train_Temp <- mice(train_data[c(2:9,12:17)], 
+                   m=5, 
+                   maxit=50, 
+                   meth='pmm',
+                   seed=500,
+                   printFlag=FALSE)  # perform mice imputation.
+
+mice_train_Output <- complete(mice_train_Temp ,1)
+anyNA(mice_train_Output)
+```
+
+```{r}
+mice_test_Temp <-  mice(test_data[c(2:8,11:16)],
+                   m=5, 
+                   maxit=50, 
+                   meth='pmm',
+                   seed=500,
+                   printFlag=FALSE)  # perform mice imputation.
+
+mice_test_Output <- complete(mice_test_Temp ,1)
+anyNA(mice_test_Output)
+```
+
+```{r}
+fit_mice <- lm(formula = TARGET_WINS ~ ., data = mice_train_Output)
+summary(fit_mice) # show result
+```
+
+```{r}
+
+mice_train_Output_int_poly <- cbind(mice_train_Output$TARGET_WINS,
+                        data.frame(model.matrix(formula_int_poly, data=mice_train_Output)))
+
+mice_train_Output_int_poly <- mice_train_Output_int_poly %>% 
+                        rename(
+                          TARGET_WINS = 'mice_train_Output$TARGET_WINS',
+                          INTERCEPT = 'X.Intercept.',
+                          ) 
+                  
+mice_train_Output_int_poly <- select(mice_train_Output_int_poly,-c(INTERCEPT))
+
+fit_mice_int <- lm(formula = 'TARGET_WINS ~ .',  data=mice_train_Output_int_poly)
+summary(fit_mice_int) # show result
+```
+
+```{r}
+# Train the model
+step_mice_model <- train(TARGET_WINS ~ ., data = mice_train_Output_int_poly,
+                    method = "leapBackward", 
+                    tuneGrid = data.frame(nvmax = 5:ncol(mice_train_Output_int_poly)),
+                    trControl = train.control
+                    )
+step_mice_model$results[as.numeric(step_mice_model$bestTune),]
+
+
+miceOutput_new_cols <- colnames(mice_train_Output_int_poly[colnames(mice_train_Output_int_poly) %in% rownames(as.matrix(coef(step_mice_model$finalModel, 
+                                                                                      as.numeric(step_mice_model$bestTune))))])
+refined_mice_formula <- as.formula(paste(' TARGET_WINS ~ ', paste(miceOutput_new_cols, collapse = ' + ')))
+refined_mice_formula
+```
+
+```{r}
+# Train the model 
+refined_mice_model <- train(refined_mice_formula,  data=mice_train_Output_int_poly, method = "lm",
+                       trControl = train.control)
+# Summarize the results
+print(refined_mice_model)
+```
+

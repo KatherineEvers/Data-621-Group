@@ -219,6 +219,10 @@ knnOutput_test$TARGET_WINS <- knnOutput_test_poly_int_pred
 knnOutput_test$TARGET_WINS
 ```
 
+## Mice Tranformations
+
+Using Mice library to impute missing values
+
 ```{r}
 mice_train_Temp <- mice(train_data[c(2:9,12:17)], 
                    m=5, 
@@ -230,6 +234,8 @@ mice_train_Temp <- mice(train_data[c(2:9,12:17)],
 mice_train_Output <- complete(mice_train_Temp ,1)
 anyNA(mice_train_Output)
 ```
+
+### Create output from Mice Model
 
 ```{r}
 mice_test_Temp <-  mice(test_data[c(2:8,11:16)],
@@ -243,10 +249,14 @@ mice_test_Output <- complete(mice_test_Temp ,1)
 anyNA(mice_test_Output)
 ```
 
+### Fit basic model with Mice treated data
+
 ```{r}
 fit_mice <- lm(formula = TARGET_WINS ~ ., data = mice_train_Output)
 summary(fit_mice) # show result
 ```
+
+The performance seems marginally better than the
 
 ```{r}
 
@@ -281,11 +291,41 @@ refined_mice_formula <- as.formula(paste(' TARGET_WINS ~ ', paste(miceOutput_new
 refined_mice_formula
 ```
 
+### Final Crossval Score for Mice Treated Data Model
+
 ```{r}
 # Train the model 
 refined_mice_model <- train(refined_mice_formula,  data=mice_train_Output_int_poly, method = "lm",
                        trControl = train.control)
 # Summarize the results
 print(refined_mice_model)
+```
+
+```{r}
+summary(refined_mice_model)
+```
+
+```{r}
+normalize <- function(x) { 
+  x <- as.matrix(x)
+  minAttr=apply(x, 2, min)
+  maxAttr=apply(x, 2, max)
+  x <- sweep(x, 2, minAttr, FUN="-") 
+  x=sweep(x, 2,  maxAttr-minAttr, "/") 
+  attr(x, 'normalized:min') = minAttr
+  attr(x, 'normalized:max') = maxAttr
+  return (x)
+} 
+
+# Train the model 
+refined_mice_model <- train(refined_mice_formula,  data=normalize(mice_train_Output_int_poly), method = "lm",
+                       trControl = train.control)
+# Summarize the results
+print(refined_mice_model)
+
+```
+
+```{r}
+summary(refined_mice_model)
 ```
 

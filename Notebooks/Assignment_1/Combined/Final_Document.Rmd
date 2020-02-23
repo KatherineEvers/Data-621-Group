@@ -274,7 +274,24 @@ step_model <- train(Wins ~ ., data = knnOutput_poly_int,
 step_model$results[as.numeric(step_model$bestTune),]
 ```
 
+### Step Model Iteration Performance
+
 Now that we know what the best model is, we can look at the combination of columns
+
+```{r,echo = FALSE, warning = FALSE, message = FALSE, fig.height=2, fig.width=8}
+step_results <- data.frame(step_model$results)
+
+ggplot(step_results,  
+       aes(nvmax,
+           Rsquared, 
+           )) +
+  geom_col(aes(fill=RsquaredSD)) +
+  ggtitle("R Squared Performance by Model") +
+  ylab("R Squared") + 
+  xlab("Number of Features in Model") +
+  theme(legend.position = "none")
+```
+
 
 ```{r}
 knnOutput_new_cols <- colnames(knnOutput_poly_int[colnames(knnOutput_poly_int) %in% rownames(as.matrix(coef(step_model$finalModel, 
@@ -296,6 +313,7 @@ print(refined_best_model)
 ```
 
 We can see that our score has increased from the overfit model
+
 
 ### Explore Test Data
 
@@ -329,6 +347,8 @@ knnOutput_test$TARGET_WINS
 
 ### Mice Tranformations
 
+### Create test output from Mice Model
+
 Using Mice library to impute missing values
 
 ```{r}
@@ -343,7 +363,7 @@ mice_train_Output <- complete(mice_train_Temp ,1)
 anyNA(mice_train_Output)
 ```
 
-### Create output from Mice Model
+### Create test output from Mice Model
 
 ```{r}
 mice_test_Temp <-  mice(test_data[c(2:8,11:16)],
@@ -403,6 +423,21 @@ refined_mice_formula <- as.formula(paste(' Wins ~ ', paste(miceOutput_new_cols, 
 refined_mice_formula
 ```
 
+```{r,echo = FALSE, warning = FALSE, message = FALSE, fig.height=2, fig.width=8}
+step_mice_results <- data.frame(step_mice_model$results)
+
+ggplot(step_mice_results,  
+       aes(nvmax,
+           Rsquared, 
+           )) +
+  geom_col(aes(fill=RsquaredSD)) +
+  ggtitle("R Squared Performance by Model") +
+  ylab("R Squared") + 
+  xlab("Number of Features in Model") +
+  theme(legend.position = "none")
+```
+
+
 ### Final crossval Score for Mice treated data model
 
 ```{r}
@@ -419,7 +454,7 @@ summary(refined_mice_model)
 
 ### Normalize Data
 
-We'll normalize data so that we can can compare coefficients
+We'll normalize data so that we can can compare coefficients. 
 
 ```{r}
 normalize <- function(x) { 

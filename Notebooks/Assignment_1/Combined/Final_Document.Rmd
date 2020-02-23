@@ -1,0 +1,448 @@
+---
+title: "Data 621 Homework 1"
+author: "Group 3: Amanda Arce,  Austin Chan, Jithendra Seneviratne, Sheryl Piechocki"
+date: "2/15/2020"
+output: pdf_document
+---
+
+**Objective:  Build a multiple linear regression model on the training data to predict the number of wins for baseball teams.**  
+
+```{r packages, echo = FALSE, warning = FALSE, message = FALSE}
+library(dplyr)
+library(ggplot2)
+library(lattice)
+library(reshape2)
+library(gridExtra)
+library(pander)
+library(corrgram)
+library(tidyr)
+library(DMwR)
+library(ggfortify)
+library(crossval)
+library(mice)
+library(DMwR)
+library(caret)
+```
+  
+```{r load, echo = FALSE, warning = FALSE, message = FALSE, results='hide'}
+train_data <- read.csv("../../../Data/Assignment_1/moneyball-training-data.csv")
+test_data <- read.csv("../../../Data/Assignment_1/moneyball-evaluation-data.csv")
+colnames(train_data)[2:17] <- c("Wins", "Hits", "Doubles", "Triples", "Home_Runs", "Walks", "Batter_SO", "Stolen_Bases", "Caught_Stealing",
+                                "Hit_by_Pitch", "Hits_Allow", "Home_Runs_Allow", "Walks_Allow", "Pitcher_SO", "Errors", "Double_Plays")
+head(train_data)
+dim(train_data)
+train_data %>%
+  summarise_all(list(~sum(is.na(.))))
+```
+
+### 1. DATA EXPLORATION  
+  
+The data used in this analysis, consists of performance statistics for baseball teams from the years 1871-2006. Each record represents the performanace of one team for one year.  There are 2,276 records and 17 baseball statistics, including the target variable wins.  Statistics include batting information, such as hits, doubles, triples, homeruns, strikeouts, and walks.  Also, given are pitching statistics of hits allowed, walks allowed, homeruns allowed, and strikeouts by pitchers.  Other information regarding errors, stolen bases, caught stealing, hit by pitch, and double plays is also available.  
+
+The distribution of the target variable, Wins is below.  It appears to be normally distributed, with a mean of 80.79 and standard deviation 15.75.  
+```{r, target, echo = FALSE, warning = FALSE, message = FALSE, fig.height=3, fig.width=5}
+ggplot(train_data, 
+       aes(x=Wins)) + 
+ geom_histogram(aes(y=..density..,),
+                bins = 60,
+                binwidth = .5) +
+ geom_density(alpha=.2, fill='blue') +
+ ylab("Density") + 
+ xlab("Number of Wins")
+summary(train_data$Wins)
+sd(train_data$Wins)
+```  
+  
+Summary statistics for each independent variable are provided below.  The variables Caught Stealing and Hit by Pitch have a large number of missing values and therefore will be excluded from all subsequent analysis.  
+
+```{r eda-sum, echo = FALSE, warning = FALSE, message = FALSE}
+sum_data <- summary(train_data[3:17])
+
+pander(sum_data, split.table = 100, style = 'rmarkdown')
+```
+  
+Box plots with the mean denoted as a red circle are provided.  
+  
+The box plots of the batting variables show many outliers in Hits and Triples, leading to right skew.    
+```{r eda-box1, echo = FALSE, warning = FALSE, message = FALSE}
+plot1 <- ggplot(train_data, aes(x= "", y=Hits)) + geom_boxplot()  + stat_summary(fun.y=mean,col = 'red',geom='point') + 
+ theme_minimal() + theme(axis.title.x=element_blank(), axis.title.y=element_blank(), panel.border=element_rect(fill=NA)) + ggtitle("Hits")
+plot2 <- ggplot(train_data, aes(x= "", y=Doubles)) + geom_boxplot()  + stat_summary(fun.y=mean,col = 'red',geom='point') + 
+  theme_minimal() +  theme(axis.title.x=element_blank(), axis.title.y=element_blank(), panel.border=element_rect(fill=NA)) + ggtitle("Doubles")
+plot3 <- ggplot(train_data, aes(x= "", y=Triples)) + geom_boxplot()  + stat_summary(fun.y=mean,col = 'red',geom='point') + 
+  theme_minimal() +  theme(axis.title.x=element_blank(), axis.title.y=element_blank(), panel.border=element_rect(fill=NA)) + ggtitle("Triples")
+plot4 <- ggplot(train_data, aes(x= "", y=Home_Runs)) + geom_boxplot()  + stat_summary(fun.y=mean,col = 'red',geom='point') + 
+  theme_minimal() +  theme(axis.title.x=element_blank(), axis.title.y=element_blank(), panel.border=element_rect(fill=NA)) + ggtitle("Home Runs")
+
+grid.arrange(plot1, plot2, plot3, plot4, ncol=2)
+```
+  
+Further, Walks, Stolen Bases, and Errors also have quite a few outliers.  
+```{r eda-box2, echo = FALSE, warning = FALSE, message = FALSE}
+plot5 <- ggplot(train_data, aes(x= "", y=Walks)) + geom_boxplot()  + stat_summary(fun.y=mean,col = 'red',geom='point') + 
+ theme_minimal() + theme(axis.title.x=element_blank(), axis.title.y=element_blank(), panel.border=element_rect(fill=NA)) + ggtitle("Walks")
+plot6 <- ggplot(train_data, aes(x= "", y=Batter_SO)) + geom_boxplot()  + stat_summary(fun.y=mean,col = 'red',geom='point') + 
+  theme_minimal() +  theme(axis.title.x=element_blank(), axis.title.y=element_blank(), panel.border=element_rect(fill=NA)) + ggtitle("Batter Strike Outs")
+plot7 <- ggplot(train_data, aes(x= "", y=Stolen_Bases)) + geom_boxplot()  + stat_summary(fun.y=mean,col = 'red',geom='point') + 
+  theme_minimal() +  theme(axis.title.x=element_blank(), axis.title.y=element_blank(), panel.border=element_rect(fill=NA)) + ggtitle("Stolen Bases")
+plot8 <- ggplot(train_data, aes(x= "", y=Errors)) + geom_boxplot()  + stat_summary(fun.y=mean,col = 'red',geom='point') + 
+  theme_minimal() +  theme(axis.title.x=element_blank(), axis.title.y=element_blank(), panel.border=element_rect(fill=NA)) + ggtitle("Errors")
+
+grid.arrange(plot5, plot6, plot7, plot8, ncol=2)
+```
+  
+The pitching statistics box plots reveal many outliers in Hits Allowed, Walks Allowed, and Pitching Strike Outs.  
+```{r eda-box3, echo = FALSE, warning = FALSE, message = FALSE}
+plot9 <- ggplot(train_data, aes(x= "", y=Hits_Allow)) + geom_boxplot()  + stat_summary(fun.y=mean,col = 'red',geom='point') + 
+ theme_minimal() + theme(axis.title.x=element_blank(), axis.title.y=element_blank(), panel.border=element_rect(fill=NA)) + ggtitle("Hits Allowed")
+plot10 <- ggplot(train_data, aes(x= "", y=Home_Runs_Allow)) + geom_boxplot()  + stat_summary(fun.y=mean,col = 'red',geom='point') + 
+  theme_minimal() +  theme(axis.title.x=element_blank(), axis.title.y=element_blank(), panel.border=element_rect(fill=NA)) + ggtitle("Home Runs Allowed")
+plot11 <- ggplot(train_data, aes(x= "", y=Walks_Allow)) + geom_boxplot()  + stat_summary(fun.y=mean,col = 'red',geom='point') + 
+  theme_minimal() +  theme(axis.title.x=element_blank(), axis.title.y=element_blank(), panel.border=element_rect(fill=NA)) + ggtitle("Walks Allowed")
+plot12 <- ggplot(train_data, aes(x= "", y=Pitcher_SO)) + geom_boxplot()  + stat_summary(fun.y=mean,col = 'red',geom='point') + 
+  theme_minimal() +  theme(axis.title.x=element_blank(), axis.title.y=element_blank(), panel.border=element_rect(fill=NA)) + ggtitle("Pitching Strike Outs")
+
+grid.arrange(plot9, plot10, plot11, plot12, ncol=2)
+```
+  
+In the histograms for the independent variables, we see that Batter Strike Outs, Home Runs, and Home Runs Allowed are bimodal.  Errors, Hits Allowed, Pitcher Strike Outs, and Triples are right skewed.  
+  
+```{r eda-hist, echo = FALSE, warning = FALSE, message = FALSE}
+train_data[c(3:9,12:17)] %>%
+  gather() %>%
+  ggplot(aes(value)) +
+    facet_wrap(~key, scales = "free") +
+    geom_histogram() + theme(axis.title.x=element_blank(), axis.title.y=element_blank())
+```
+
+The correlogram below provides some insight into the data.  Wins has the highest positive correlation with Hits and Walks, and negative correlation with Errors.  In addition, the batting variables that have corresponding pitching variables are highly correlated, i.e. Walks is highly positively correlated with Walks Allowed, Strike Outs is highly positively correlated with Pitcher Strike Outs, etc.  Other interesting correlations found are: HOme Runs and Errors are negatively correlated, Triples and Batter Strike Outs are negatively correlated, and Home Runs and Batter Strike Outs are positively correlated.
+
+```{r eda-corr, echo = FALSE, warning = FALSE, message = FALSE}
+cor_matrix <- cor(train_data[c(2:9,12:17)][complete.cases(train_data[c(2:9,12:17)]),], method = c("pearson", "kendall", "spearman"))
+# cor_matrix
+melted_data <- melt(cor_matrix)
+corrgram(cor_matrix,  lower.panel=panel.shade,
+  upper.panel=NULL, text.panel=panel.txt,
+  main="Moneyball Data Correlogram")
+
+
+```
+  
+Scatter plots of Wins versus a few of the independent variables are hard to decipher due to the large amount of records.  The relationship between Wins and Hits, Doubles, and Walks looks to be positive linear, while the relationship between Wins and Errors appears to be negative linear.  
+
+```{r eda-scatter, echo = FALSE, warning = FALSE, message = FALSE}
+train.wide  <- melt(train_data[c(2:9,12:17)],id.vars='Wins')
+ggplot(data=train.wide,aes(x=value,y=Wins)) +
+  geom_point(alpha = 0.3, size = 1) +
+  geom_smooth(method='lm') +
+  facet_wrap(~variable, scale  ='free_x') + theme(axis.title.x=element_blank())
+```
+
+#### Fit regression model to variables with few missing values. Get rid of missing values.
+
+Our first attempt was to fit a model excluding the variables with a large proportion of missing values. This model includes every variable except for INDEX, caught_stealing, and hit_by_pitch. There were no transformations made to this model nor was normalization applied. The purpose of this model is to establish a baseline to test against future models.
+
+```{r}
+fit <- lm(formula = Wins ~ ., data = train_data[c(2:9,12:17)][complete.cases(train_data[c(2:9,12:17)]),])
+summary(fit) # show result
+```
+
+#### Check to see how many rows were retained
+
+Despite excluding those three columns, over 800 rows were removed from other columns that had missing values. Given that the dataset has over 2700 rows, a loss of 800 rows is very significant and will have a massive impact on the model.
+
+```{r}
+ nrow(train_data[c(2:9,12:17)][complete.cases(train_data[c(2:9,12:17)]),])
+```
+
+### Analyze residuals
+
+Looking at the residuals, we can see that the residuals are fairly normally distributed with no discernible pattern. The variance is mostly constant and there does not appear to be many outliers that exhibit a high degree of leverage. Overall, the fit is good.
+
+```{r}
+autoplot(fit)
+```
+
+
+
+### 2. DATA PREPARATION  
+
+#### KNN Imputation
+
+Given that there are so many missing values, we wanted to find a way to impute the missing values so that we could use every bit of data in the dataset. Our first attempt involved using the K-nearest neighbors imputation method. We used this method because it does not rely on any assumptions about the distribution of the varaibles and is relatively straightforward in its implementation. This particular function auto-normalizes the data, which is convenient.
+
+```{r}
+knnOutput <- knnImputation(train_data[c(2:9,12:17)])  # perform knn imputation.
+anyNA(knnOutput)
+```
+
+Ensure that all rown have non-null values
+
+```{r}
+head(knnOutput,5)
+nrow(knnOutput)
+```
+
+#### Fitting a model after KNN imputation
+
+Now that the missing values have been imputed with KNN, we reran the model on the new dataset. As we can see from the output below, imputing the data has made the fit worse when including all the variables in the model. It is possible that the imputed rows added more bias to the model since imputation tends towards the average. While the R-squared is worse, it is also possible that this model has better predictive power compared to the previous model.
+
+```{r}
+fit_knn <- lm(formula = Wins ~ ., data = knnOutput)
+summary(fit_knn) # show result
+```
+
+The R^2 value seems to have improved a little. Let's add the squared terms
+
+#### Add squared terms to KNN model
+
+```{r}
+formula_int = Wins ~ .^2
+
+knnOutput_int <- cbind(knnOutput$Wins,
+                        data.frame(model.matrix(formula_int, data=knnOutput)))
+knnOutput_int <- knnOutput_int %>% 
+                        rename(
+                          Wins = 'knnOutput$Wins',
+                          INTERCEPT = 'X.Intercept.',
+                          ) 
+                  
+knnOutput_int <- select(knnOutput_int,-c(INTERCEPT))
+
+fit_knn_int <- lm(formula = 'Wins ~ .',  data= knnOutput_int)
+summary(fit_knn_int) # show result
+```
+
+We see a substantial improvement. Let's add the polynomial features
+
+#### Add polynomial features to KNN model
+
+```{r}
+formula_int_poly <- as.formula(paste(' Wins ~ .^2 + ', paste('poly(',colnames(knnOutput[,!colnames(knnOutput) %in% 'Wins']),',2, raw=TRUE)[, 2]', collapse = ' + ')))
+
+knnOutput_poly_int <- cbind(knnOutput$Wins,
+                        data.frame(model.matrix(formula_int_poly, data=knnOutput)))
+knnOutput_poly_int <- knnOutput_poly_int %>% 
+                        rename(
+                          Wins = 'knnOutput$Wins',
+                          INTERCEPT = 'X.Intercept.',
+                          ) 
+                  
+knnOutput_poly_int <- select(knnOutput_poly_int,-c(INTERCEPT))
+
+fit_knn_poly_int <- lm(formula = 'Wins ~ .',  data= knnOutput_poly_int)
+summary(fit_knn_poly_int) # show result
+```
+
+The model seems to have improved. Let's look at residuals
+
+### Check residuals for full model
+
+```{r}
+autoplot(fit_knn_poly_int)
+```
+
+### 3. BUILD MODELS  
+
+
+### 4. SELECT MODELS  
+  
+### Run 10 fold crossvalidation and select the best model
+
+```{r}
+train_control <- trainControl(method = "cv", 
+                              p = .8,
+                              number = 10)
+# Train the model 
+best_model <- train(Wins ~ .,  data= knnOutput_poly_int, method = "lm",
+               trControl = train_control)
+# Summarize the results
+print(best_model)
+```
+
+As we can see, the model is very overfit. We'll use a stepwise algorithm to select he best combination of columns
+
+### Stepwise model selection
+
+```{r}
+# Train the model
+step_model <- train(Wins ~ ., data = knnOutput_poly_int,
+                    method = "leapBackward", 
+                    tuneGrid = data.frame(nvmax = 5:ncol(knnOutput_poly_int)),
+                    trControl = train.control
+                    )
+step_model$results[as.numeric(step_model$bestTune),]
+```
+
+Now that we know what the best model is, we can look at the combination of columns
+
+```{r}
+knnOutput_new_cols <- colnames(knnOutput_poly_int[colnames(knnOutput_poly_int) %in% rownames(as.matrix(coef(step_model$finalModel, 
+                                                                                      as.numeric(step_model$bestTune))))])
+refined_formula <- as.formula(paste(' Wins ~ ', paste(knnOutput_new_cols, collapse = ' + ')))
+refined_formula
+```
+
+Let's run the refined model and look at our crossval score
+
+### Cross validate refined model
+
+```{r}
+# Train the model 
+refined_best_model <- train(refined_formula,  data=knnOutput_poly_int, method = "lm",
+                       trControl = train.control)
+# Summarize the results
+print(refined_best_model)
+```
+
+We can see that our score has increased from the overfit model
+
+### Explore Test Data
+
+```{r}
+colnames(test_data)[2:16] <- c("Hits", "Doubles", "Triples", "Home_Runs", "Walks", "Batter_SO", "Stolen_Bases", "Caught_Stealing",
+                                "Hit_by_Pitch", "Hits_Allow", "Home_Runs_Allow", "Walks_Allow", "Pitcher_SO", "Errors", "Double_Plays")
+head(test_data)
+test_data %>%
+  summarise_all(list(~sum(is.na(.))))
+summary(test_data)
+```
+
+### Perform KNN imputation on test data
+
+```{r}
+knnOutput_test <- knnImputation(test_data[c(2:8,11:16)]) 
+summary(knnOutput_test)
+```
+
+### Perform predictions on test data
+
+```{r}
+knnOutput_test$Wins <- 'NA'
+knnOutput_test_poly_int <- data.frame(model.matrix(formula_int_poly, data=knnOutput_test))
+knnOutput_test_poly_int_pred <- predict(refined_best_model, knnOutput_test_poly_int,
+                                        interval = "prediction")
+
+knnOutput_test$TARGET_WINS <- knnOutput_test_poly_int_pred
+knnOutput_test$TARGET_WINS
+```
+
+### Mice Tranformations
+
+Using Mice library to impute missing values
+
+```{r}
+mice_train_Temp <- mice(train_data[c(2:9,12:17)], 
+                   m=5, 
+                   maxit=50, 
+                   meth='pmm',
+                   seed=500,
+                   printFlag=FALSE)  # perform mice imputation.
+
+mice_train_Output <- complete(mice_train_Temp ,1)
+anyNA(mice_train_Output)
+```
+
+### Create output from Mice Model
+
+```{r}
+mice_test_Temp <-  mice(test_data[c(2:8,11:16)],
+                   m=5, 
+                   maxit=50, 
+                   meth='pmm',
+                   seed=500,
+                   printFlag=FALSE)  # perform mice imputation.
+
+mice_test_Output <- complete(mice_test_Temp ,1)
+anyNA(mice_test_Output)
+```
+
+#### Fit basic model with Mice treated data
+
+```{r}
+fit_mice <- lm(formula = Wins ~ ., data = mice_train_Output)
+summary(fit_mice) # show result
+```
+
+The performance seems marginally better than the output from the KNN imputed dataset. Let's try our full model
+
+### Run full model on Mice treated data
+
+```{r}
+
+mice_train_Output_int_poly <- cbind(mice_train_Output$Wins,
+                                    data.frame(model.matrix(formula_int_poly, data=mice_train_Output)))
+
+mice_train_Output_int_poly <- mice_train_Output_int_poly %>% 
+                        rename(
+                          Wins = 'mice_train_Output$Wins',
+                          INTERCEPT = 'X.Intercept.',
+                          ) 
+                  
+mice_train_Output_int_poly <- select(mice_train_Output_int_poly,-c(INTERCEPT))
+
+fit_mice_int_poly <- lm(formula = ' Wins ~ .',  data=mice_train_Output_int_poly)
+summary(fit_mice_int_poly) # show result
+```
+
+### Pick best subset on Mice treated data
+
+```{r}
+# Train the model
+step_mice_model <- train(Wins ~ ., data = mice_train_Output_int_poly,
+                    method = "leapBackward", 
+                    tuneGrid = data.frame(nvmax = 5:ncol(mice_train_Output_int_poly)),
+                    trControl = train.control
+                    )
+step_mice_model$results[as.numeric(step_mice_model$bestTune),]
+
+
+miceOutput_new_cols <- colnames(mice_train_Output_int_poly[colnames(mice_train_Output_int_poly) %in% rownames(as.matrix(coef(step_mice_model$finalModel, 
+                                                                                      as.numeric(step.model$bestTune))))])
+refined_mice_formula <- as.formula(paste(' Wins ~ ', paste(miceOutput_new_cols, collapse = ' + ')))
+refined_mice_formula
+```
+
+### Final crossval Score for Mice treated data model
+
+```{r}
+# Train the model 
+refined_mice_model <- train(refined_mice_formula,  data=mice_train_Output_int_poly, method = "lm",
+                       trControl = train.control)
+# Summarize the results
+print(refined_mice_model)
+```
+
+```{r}
+summary(refined_mice_model)
+```
+
+### Normalize Data
+
+We'll normalize data so that we can can compare coefficients
+
+```{r}
+normalize <- function(x) { 
+  x <- as.matrix(x)
+  minAttr=apply(x, 2, min)
+  maxAttr=apply(x, 2, max)
+  x <- sweep(x, 2, minAttr, FUN="-") 
+  x=sweep(x, 2,  maxAttr-minAttr, "/") 
+  attr(x, 'normalized:min') = minAttr
+  attr(x, 'normalized:max') = maxAttr
+  return (x)
+} 
+
+# Train the model 
+refined_mice_model_norm <- train(refined_mice_formula,  data=normalize(mice_train_Output_int_poly), method = "lm",
+                       trControl = train.control)
+# Summarize the results
+print(refined_mice_model_norm)
+
+```
+
+```{r}
+summary(refined_mice_model_norm)
+```
+
+

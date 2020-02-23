@@ -13,17 +13,20 @@ library(ggplot2)
 library(lattice)
 library(reshape2)
 library(gridExtra)
+library(pander)
+library(corrgram)
+library(tidyr)
+library(DMwR)
 ```
   
 ```{r load, echo = FALSE, warning = FALSE, message = FALSE, results='hide'}
-train_data_o <- read.csv("C:/Users/spiec/Documents/Sheryl/CUNY MSDS/DATA621/Homework 1/Data-621-Group/Data/Assignment_1/moneyball-training-data.csv")
 train_data <- read.csv("C:/Users/spiec/Documents/Sheryl/CUNY MSDS/DATA621/Homework 1/Data-621-Group/Data/Assignment_1/moneyball-training-data.csv")
-colnames(train_data)[2:17] <- c("Wins", "Hits", "Doubles", "Triples", "Home Runs", "Walks", "Batter SO", "Stolen Bases", "Caught Stealing",
-                                "Hit by Pitch", "Hits Allow", "Home Runs Allow", "Walks Allow", "Pitcher SO", "Errors", "Double Plays")
-head(train_data)
-dim(train_data)
-train_data %>%
-  summarise_all(list(~sum(is.na(.))))
+colnames(train_data)[2:17] <- c("Wins", "Hits", "Doubles", "Triples", "Home_Runs", "Walks", "Batter_SO", "Stolen_Bases", "Caught_Stealing",
+                                "Hit_by_Pitch", "Hits_Allow", "Home_Runs_Allow", "Walks_Allow", "Pitcher_SO", "Errors", "Double_Plays")
+#head(train_data)
+#dim(train_data)
+#train_data %>%
+#  summarise_all(list(~sum(is.na(.))))
 ```
 
 ### 1. DATA EXPLORATION  
@@ -47,12 +50,15 @@ ggplot(train_data,
 Summary statistics for each independent variable are provided below.  The variables Caught Stealing and Hit by Pitch have a large number of missing values and therefore will be excluded from all subsequent analysis.  
 
 ```{r eda-sum, echo = FALSE, warning = FALSE, message = FALSE}
-summary(train_data[3:17])
+
+sum_data <- summary(train_data[3:17])
+
+pander(sum_data, split.table = 100, style = 'rmarkdown')
 ```
   
 Box plots with the mean denoted as a red circle are provided.  
   
-The box plots of the batting variables show many outliers in Hits and Triples.  The spread on Home Runs is large.  
+The box plots of the batting variables show many outliers in Hits and Triples, leading to right skew.    
 ```{r eda-box1, echo = FALSE, warning = FALSE, message = FALSE}
 plot1 <- ggplot(train_data, aes(x= "", y=Hits)) + geom_boxplot()  + stat_summary(fun.y=mean,col = 'red',geom='point') + 
  theme_minimal() + theme(axis.title.x=element_blank(), axis.title.y=element_blank(), panel.border=element_rect(fill=NA)) + ggtitle("Hits")
@@ -60,7 +66,7 @@ plot2 <- ggplot(train_data, aes(x= "", y=Doubles)) + geom_boxplot()  + stat_summ
   theme_minimal() +  theme(axis.title.x=element_blank(), axis.title.y=element_blank(), panel.border=element_rect(fill=NA)) + ggtitle("Doubles")
 plot3 <- ggplot(train_data, aes(x= "", y=Triples)) + geom_boxplot()  + stat_summary(fun.y=mean,col = 'red',geom='point') + 
   theme_minimal() +  theme(axis.title.x=element_blank(), axis.title.y=element_blank(), panel.border=element_rect(fill=NA)) + ggtitle("Triples")
-plot4 <- ggplot(train_data, aes(x= "", y=train_data$`Home Runs`)) + geom_boxplot()  + stat_summary(fun.y=mean,col = 'red',geom='point') + 
+plot4 <- ggplot(train_data, aes(x= "", y=Home_Runs)) + geom_boxplot()  + stat_summary(fun.y=mean,col = 'red',geom='point') + 
   theme_minimal() +  theme(axis.title.x=element_blank(), axis.title.y=element_blank(), panel.border=element_rect(fill=NA)) + ggtitle("Home Runs")
 
 grid.arrange(plot1, plot2, plot3, plot4, ncol=2)
@@ -70,9 +76,9 @@ Further, Walks, Stolen Bases, and Errors also have quite a few outliers.
 ```{r eda-box2, echo = FALSE, warning = FALSE, message = FALSE}
 plot5 <- ggplot(train_data, aes(x= "", y=Walks)) + geom_boxplot()  + stat_summary(fun.y=mean,col = 'red',geom='point') + 
  theme_minimal() + theme(axis.title.x=element_blank(), axis.title.y=element_blank(), panel.border=element_rect(fill=NA)) + ggtitle("Walks")
-plot6 <- ggplot(train_data, aes(x= "", y=`Batter SO`)) + geom_boxplot()  + stat_summary(fun.y=mean,col = 'red',geom='point') + 
+plot6 <- ggplot(train_data, aes(x= "", y=Batter_SO)) + geom_boxplot()  + stat_summary(fun.y=mean,col = 'red',geom='point') + 
   theme_minimal() +  theme(axis.title.x=element_blank(), axis.title.y=element_blank(), panel.border=element_rect(fill=NA)) + ggtitle("Batter Strike Outs")
-plot7 <- ggplot(train_data, aes(x= "", y=`Stolen Bases`)) + geom_boxplot()  + stat_summary(fun.y=mean,col = 'red',geom='point') + 
+plot7 <- ggplot(train_data, aes(x= "", y=Stolen_Bases)) + geom_boxplot()  + stat_summary(fun.y=mean,col = 'red',geom='point') + 
   theme_minimal() +  theme(axis.title.x=element_blank(), axis.title.y=element_blank(), panel.border=element_rect(fill=NA)) + ggtitle("Stolen Bases")
 plot8 <- ggplot(train_data, aes(x= "", y=Errors)) + geom_boxplot()  + stat_summary(fun.y=mean,col = 'red',geom='point') + 
   theme_minimal() +  theme(axis.title.x=element_blank(), axis.title.y=element_blank(), panel.border=element_rect(fill=NA)) + ggtitle("Errors")
@@ -80,48 +86,58 @@ plot8 <- ggplot(train_data, aes(x= "", y=Errors)) + geom_boxplot()  + stat_summa
 grid.arrange(plot5, plot6, plot7, plot8, ncol=2)
 ```
   
-The pitching statistics box plots reveal many outliers in Hits Allowed, Walks Allowed, and Pitching Strike Outs.  As was seen in Home Runs, the Home Runs Allowed has a large spread.  
+The pitching statistics box plots reveal many outliers in Hits Allowed, Walks Allowed, and Pitching Strike Outs.  
 ```{r eda-box3, echo = FALSE, warning = FALSE, message = FALSE}
-plot9 <- ggplot(train_data, aes(x= "", y=`Hits Allow`)) + geom_boxplot()  + stat_summary(fun.y=mean,col = 'red',geom='point') + 
+plot9 <- ggplot(train_data, aes(x= "", y=Hits_Allow)) + geom_boxplot()  + stat_summary(fun.y=mean,col = 'red',geom='point') + 
  theme_minimal() + theme(axis.title.x=element_blank(), axis.title.y=element_blank(), panel.border=element_rect(fill=NA)) + ggtitle("Hits Allowed")
-plot10 <- ggplot(train_data, aes(x= "", y=`Home Runs Allow`)) + geom_boxplot()  + stat_summary(fun.y=mean,col = 'red',geom='point') + 
+plot10 <- ggplot(train_data, aes(x= "", y=Home_Runs_Allow)) + geom_boxplot()  + stat_summary(fun.y=mean,col = 'red',geom='point') + 
   theme_minimal() +  theme(axis.title.x=element_blank(), axis.title.y=element_blank(), panel.border=element_rect(fill=NA)) + ggtitle("Home Runs Allowed")
-plot11 <- ggplot(train_data, aes(x= "", y=`Walks Allow`)) + geom_boxplot()  + stat_summary(fun.y=mean,col = 'red',geom='point') + 
+plot11 <- ggplot(train_data, aes(x= "", y=Walks_Allow)) + geom_boxplot()  + stat_summary(fun.y=mean,col = 'red',geom='point') + 
   theme_minimal() +  theme(axis.title.x=element_blank(), axis.title.y=element_blank(), panel.border=element_rect(fill=NA)) + ggtitle("Walks Allowed")
-plot12 <- ggplot(train_data, aes(x= "", y=`Pitcher SO`)) + geom_boxplot()  + stat_summary(fun.y=mean,col = 'red',geom='point') + 
+plot12 <- ggplot(train_data, aes(x= "", y=Pitcher_SO)) + geom_boxplot()  + stat_summary(fun.y=mean,col = 'red',geom='point') + 
   theme_minimal() +  theme(axis.title.x=element_blank(), axis.title.y=element_blank(), panel.border=element_rect(fill=NA)) + ggtitle("Pitching Strike Outs")
 
 grid.arrange(plot9, plot10, plot11, plot12, ncol=2)
 ```
   
-The correlation matrix below provides some insight into the data.  Wins has the highest positive correlation with Hits and Walks, and negative correlation with Errors.  In addition, the batting variables that have corresponding pitching variables are highly correlated, i.e. Walks is highly positively correlated with Walks Allowed, Strike Outs is highly positively correlated with Pitcher Strike Outs, etc.  Other interesting correlations found are: HOme Runs and Errors are negatively correlated, Triples and Batter Strike Outs are negatively correlated, and Home Runs and Batter Strike Outs are positively correlated.
+In the histograms for the independent variables, we see that Batter Strike Outs, Home Runs, and Home Runs Allowed are bimodal.  Errors, Hits Allowed, Pitcher Strike Outs, and Triples are right skewed.  
+  
+```{r eda-hist, echo = FALSE, warning = FALSE, message = FALSE}
+
+train_data[c(3:9,12:17)] %>%
+  gather() %>%
+  ggplot(aes(value)) +
+    facet_wrap(~key, scales = "free") +
+    geom_histogram() + theme(axis.title.x=element_blank(), axis.title.y=element_blank())
+```
+
+The correlogram below provides some insight into the data.  Wins has the highest positive correlation with Hits and Walks, and negative correlation with Errors.  In addition, the batting variables that have corresponding pitching variables are highly correlated, i.e. Walks is highly positively correlated with Walks Allowed, Strike Outs is highly positively correlated with Pitcher Strike Outs, etc.  Other interesting correlations found are: HOme Runs and Errors are negatively correlated, Triples and Batter Strike Outs are negatively correlated, and Home Runs and Batter Strike Outs are positively correlated.
 ```{r eda-corr, echo = FALSE, warning = FALSE, message = FALSE}
 cor_matrix <- cor(train_data[c(2:9,12:17)][complete.cases(train_data[c(2:9,12:17)]),], method = c("pearson", "kendall", "spearman"))
 # cor_matrix
 melted_data <- melt(cor_matrix)
-colnames(melted_data)[3] <- c("Corr Coeff")
-ggplot(data=melted_data, aes(x=Var1, y=Var2, fill=`Corr Coeff`)) + 
-  geom_tile() + ggtitle("Correlation Map") +
-  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
-  ylab("") +  xlab("") 
+corrgram(cor_matrix,  lower.panel=panel.shade,
+  upper.panel=NULL, text.panel=panel.txt,
+  main="Moneyball Data Correlogram")
+
+
 ```
   
-Scatter plots of Wins versus a few of the independent variables are hard to decipher due to the large amount of records.  The relationship between wins and hits, doubles, and walks looks to be positive linear, while the relationship between wins and errors appears to be negative linear.  
+Scatter plots of Wins versus a few of the independent variables are hard to decipher due to the large amount of records.  The relationship between Wins and Hits, Doubles, and Walks looks to be positive linear, while the relationship between Wins and Errors appears to be negative linear.  
 
 ```{r eda-scatter, echo = FALSE, warning = FALSE, message = FALSE}
-par(mfcol = c(2,3)) 
-plot(Wins ~ Hits, data = train_data)
-plot(Wins ~ Doubles, data = train_data)
-plot(Wins ~ Triples, data = train_data)
-plot(Wins ~ `Home Runs`, data = train_data)
-plot(Wins ~ Walks, data = train_data)
-plot(Wins ~ Errors, data = train_data)
-par(mfcol = c(1,1)) 
+train.wide  <- melt(train_data[c(2:9,12:17)],id.vars='Wins')
+ggplot(data=train.wide,aes(x=value,y=Wins)) +
+  geom_point(alpha = 0.3, size = 1) +
+  geom_smooth(method='lm') +
+  facet_wrap(~variable, scale  ='free_x') + theme(axis.title.x=element_blank())
+
 ```
 
 
 ### 2. DATA PREPARATION  
   
+
 ### 3. BUILD MODELS  
   
 ### 4. SELECT MODELS  

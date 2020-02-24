@@ -155,7 +155,7 @@ Despite excluding those three columns, over 800 rows were removed from other col
  nrow(train_data[c(2:9,12:17)][complete.cases(train_data[c(2:9,12:17)]),])
 ```
 
-### Analyze residuals
+#### Analyze residuals
 
 Looking at the residuals, we can see that the residuals are fairly normally distributed with no discernible pattern. The variance is mostly constant and there does not appear to be many outliers that exhibit a high degree of leverage. Overall, the fit is good.
 
@@ -236,7 +236,7 @@ summary(fit_knn_poly_int) # show result
 
 The model seems to have improved. Let's look at residuals
 
-### Check residuals for full model
+#### Check residuals for full model
 
 ```{r}
 autoplot(fit_knn_poly_int)
@@ -247,7 +247,7 @@ autoplot(fit_knn_poly_int)
 
 ### 4. SELECT MODELS  
   
-### Run 10 fold crossvalidation and select the best model
+#### Run 10 fold crossvalidation and select the best model
 
 ```{r}
 train_control <- trainControl(method = "cv", 
@@ -260,9 +260,9 @@ best_model <- train(Wins ~ .,  data= knnOutput_poly_int, method = "lm",
 print(best_model)
 ```
 
-As we can see, the model is very overfit. We'll use a stepwise algorithm to select he best combination of columns
+As we can see, the model is very overfit. The problem stems from the fact that we have 105 features in our model. We can use regularization techniques fir futire work, but for now, let's use stepwise model selection to get the best performing model.
 
-### Stepwise model selection
+#### Stepwise model selection
 
 ```{r}
 # Train the model
@@ -274,7 +274,7 @@ step_model <- train(Wins ~ ., data = knnOutput_poly_int,
 step_model$results[as.numeric(step_model$bestTune),]
 ```
 
-### Step Model Iteration Performance
+#### Step Model Iteration Performance
 
 Now that we know what the best model is, we can look at the combination of columns
 
@@ -292,6 +292,7 @@ ggplot(step_results,
   theme(legend.position = "none")
 ```
 
+It seems that the number of features is limited to 19, meaning that the remainder of our features were contributing to overfitting  the model.
 
 ```{r}
 knnOutput_new_cols <- colnames(knnOutput_poly_int[colnames(knnOutput_poly_int) %in% rownames(as.matrix(coef(step_model$finalModel, 
@@ -302,7 +303,7 @@ refined_formula
 
 Let's run the refined model and look at our crossval score
 
-### Cross validate refined model
+#### Cross validate refined model
 
 ```{r}
 # Train the model 
@@ -313,7 +314,6 @@ print(refined_best_model)
 ```
 
 We can see that our score has increased from the overfit model
-
 
 ### Explore Test Data
 
@@ -326,14 +326,14 @@ test_data %>%
 summary(test_data)
 ```
 
-### Perform KNN imputation on test data
+#### Perform KNN imputation on test data
 
 ```{r}
 knnOutput_test <- knnImputation(test_data[c(2:8,11:16)]) 
 summary(knnOutput_test)
 ```
 
-### Perform predictions on test data
+####Perform predictions on test data
 
 ```{r}
 knnOutput_test$Wins <- 'NA'
@@ -347,7 +347,7 @@ knnOutput_test$TARGET_WINS
 
 ### Mice Tranformations
 
-### Create test output from Mice Model
+#### Create test output from Mice Model
 
 Using Mice library to impute missing values
 
@@ -363,7 +363,7 @@ mice_train_Output <- complete(mice_train_Temp ,1)
 anyNA(mice_train_Output)
 ```
 
-### Create test output from Mice Model
+#### Create test output from Mice Model
 
 ```{r}
 mice_test_Temp <-  mice(test_data[c(2:8,11:16)],
@@ -386,7 +386,7 @@ summary(fit_mice) # show result
 
 The performance seems marginally better than the output from the KNN imputed dataset. Let's try our full model
 
-### Run full model on Mice treated data
+#### Run full model on Mice treated data
 
 ```{r}
 
@@ -405,7 +405,7 @@ fit_mice_int_poly <- lm(formula = ' Wins ~ .',  data=mice_train_Output_int_poly)
 summary(fit_mice_int_poly) # show result
 ```
 
-### Pick best subset on Mice treated data
+#### Pick best subset on Mice treated data
 
 ```{r}
 # Train the model

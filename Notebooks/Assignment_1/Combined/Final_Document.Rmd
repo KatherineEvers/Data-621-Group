@@ -22,6 +22,7 @@ library(crossval)
 library(mice)
 library(DMwR)
 library(caret)
+library(olsrr)
 ```
   
 ```{r load, echo = FALSE, warning = FALSE, message = FALSE, results='hide'}
@@ -183,6 +184,8 @@ head(knnOutput,5)
 nrow(knnOutput)
 ```
 
+### 3. BUILD MODELS  
+
 #### Fitting a model after KNN imputation
 
 Now that the missing values have been imputed with KNN, we reran the model on the new dataset. As we can see from the output below, imputing the data has made the fit worse when including all the variables in the model. It is possible that the imputed rows added more bias to the model since imputation tends towards the average. While the R-squared is worse, it is also possible that this model has better predictive power compared to the previous model.
@@ -242,188 +245,32 @@ The model seems to have improved. Let's look at residuals
 autoplot(fit_knn_poly_int)
 ```
 
-### 3. BUILD MODELS  
+#### Model Backwards elimination and Significance
 
-#Models
-
-##Model: All Variables
-
-All remaining variables after the data prep. After the data has been manipulated (imputed, etc. as stated above), all of the variables will be tested to determine the base model they provided.
+Variables will be removed one by one to determine best fit model. After each variable is removed, the model will be run again - until the most optimal output (r2, f-stat) are produced.  The OLSRR library is used to determine the best fit variables for the backwards elimination.  The best variables are then selected and used in the model - rather than having the OLSRR function regenerate the list.
 
 ```{r}
-model1 <- lm(TARGET_WINS ~., knnOutput_int)
-summary(model1)
-```
-
-
-**Conclusions based on model:**
-
-F-statistic is 25.59, Adj. R-Squared is 0.4575.  
-
-
-##Model Backwards elimination and Significance
-
-Variables will be removed one by one to determine best fit model. After each variable is removed, the model will be 'ran' again - until the most optimal output (r2, f-stat) are produced.  The OLSRR library is used to determine the best fit variables for the backwards elimination.  The best variables are then selected and used in the model - rather than having the OLSRR function regenerate the list.
-
-```{r}
-#ols_step_backward_p(model1, details=F)
-```
-
-```{r}
-model_backwards <- lm(
-TARGET_WINS ~
-TEAM_BATTING_H +
-TEAM_BATTING_2B +
-TEAM_BATTING_3B +
-TEAM_BATTING_HR +
-TEAM_BATTING_BB +
-TEAM_BATTING_SO +
-TEAM_BASERUN_SB +
-TEAM_PITCHING_H +
-TEAM_PITCHING_HR +
-TEAM_PITCHING_BB +
-TEAM_PITCHING_SO +
-TEAM_FIELDING_E +
-TEAM_BATTING_H.TEAM_BATTING_2B +
-TEAM_BATTING_H.TEAM_BATTING_3B +
-TEAM_BATTING_H.TEAM_BATTING_HR +
-TEAM_BATTING_H.TEAM_BATTING_BB +
-TEAM_BATTING_H.TEAM_BATTING_SO +
-TEAM_BATTING_H.TEAM_BASERUN_SB +
-TEAM_BATTING_H.TEAM_PITCHING_H +
-TEAM_BATTING_H.TEAM_PITCHING_HR +
-TEAM_BATTING_H.TEAM_PITCHING_BB +
-TEAM_BATTING_H.TEAM_PITCHING_SO +
-TEAM_BATTING_H.TEAM_FIELDING_E +
-TEAM_BATTING_2B.TEAM_BATTING_3B +
-TEAM_BATTING_2B.TEAM_BATTING_HR +
-TEAM_BATTING_2B.TEAM_BATTING_BB +
-TEAM_BATTING_2B.TEAM_BATTING_SO +
-TEAM_BATTING_2B.TEAM_BASERUN_SB +
-TEAM_BATTING_2B.TEAM_PITCHING_H +
-TEAM_BATTING_2B.TEAM_PITCHING_HR +
-TEAM_BATTING_2B.TEAM_PITCHING_BB +
-TEAM_BATTING_2B.TEAM_PITCHING_SO +
-TEAM_BATTING_2B.TEAM_FIELDING_E +
-TEAM_BATTING_3B.TEAM_BATTING_HR +
-TEAM_BATTING_3B.TEAM_BATTING_BB +
-TEAM_BATTING_3B.TEAM_BATTING_SO +
-TEAM_BATTING_3B.TEAM_BASERUN_SB +
-TEAM_BATTING_3B.TEAM_PITCHING_H +
-TEAM_BATTING_3B.TEAM_PITCHING_HR +
-TEAM_BATTING_3B.TEAM_PITCHING_BB +
-TEAM_BATTING_3B.TEAM_PITCHING_SO +
-TEAM_BATTING_3B.TEAM_FIELDING_E +
-TEAM_BATTING_HR.TEAM_BATTING_BB +
-TEAM_BATTING_HR.TEAM_BATTING_SO +
-TEAM_BATTING_HR.TEAM_BASERUN_SB +
-TEAM_BATTING_HR.TEAM_PITCHING_H +
-TEAM_BATTING_HR.TEAM_PITCHING_HR +
-TEAM_BATTING_HR.TEAM_PITCHING_BB +
-TEAM_BATTING_HR.TEAM_PITCHING_SO +
-TEAM_BATTING_HR.TEAM_FIELDING_E +
-TEAM_BATTING_BB.TEAM_BATTING_SO +
-TEAM_BATTING_BB.TEAM_BASERUN_SB +
-TEAM_BATTING_BB.TEAM_PITCHING_H  +
-TEAM_BATTING_BB.TEAM_PITCHING_HR +
-TEAM_BATTING_BB.TEAM_PITCHING_BB +
-TEAM_BATTING_BB.TEAM_PITCHING_SO +
-TEAM_BATTING_BB.TEAM_FIELDING_E +
-TEAM_BATTING_SO.TEAM_BASERUN_SB +
-TEAM_BATTING_SO.TEAM_PITCHING_H +
-TEAM_BATTING_SO.TEAM_PITCHING_HR+
-TEAM_BATTING_SO.TEAM_PITCHING_BB    +
-TEAM_BATTING_SO.TEAM_PITCHING_SO +
-TEAM_BATTING_SO.TEAM_FIELDING_E +
-TEAM_BASERUN_SB.TEAM_PITCHING_H +
-TEAM_BASERUN_SB.TEAM_PITCHING_HR +
-TEAM_BASERUN_SB.TEAM_PITCHING_BB +
-TEAM_BASERUN_SB.TEAM_PITCHING_SO +
-TEAM_BASERUN_SB.TEAM_FIELDING_E +
-TEAM_PITCHING_H.TEAM_PITCHING_HR +
-TEAM_PITCHING_H.TEAM_PITCHING_BB +
-TEAM_PITCHING_H.TEAM_PITCHING_SO +
-TEAM_PITCHING_H.TEAM_FIELDING_E +
-TEAM_PITCHING_HR.TEAM_PITCHING_BB+ 
-TEAM_PITCHING_HR.TEAM_PITCHING_SO +
-TEAM_PITCHING_HR.TEAM_FIELDING_E +
-TEAM_PITCHING_BB.TEAM_PITCHING_SO +
-TEAM_PITCHING_BB.TEAM_FIELDING_E +
-TEAM_PITCHING_SO.TEAM_FIELDING_E, data=knnOutput_int)
-summary(model_backwards)
+#ols_step_backward <- ols_step_backward_p(fit_knn_poly_int, details=F)
+summary(ols_step_backward$model)
 ```
 
 **Conclusions based on model:**
 
-F-statistic is 25.59, Adj. R-Squared is 0.4575.  
+F-statistic is 29.3, Adj. R-Squared is 0.4859.
 
-##Model Forward Selection and Significance
+#### Model Forward Selection and Significance
 
-Model is based on the stepwise forward regression method.  Variables are entered based on p-values until there are no more variables left to enter. The OLSRR library is used to determine the best fit variables for the backwards elimination.  The best variables are then selected and used in the model - rather than having the OLSRR function regenerate the list.
-
-```{r}
-#library(olsrr)
-#ols_step_forward_p(model1)
-```
+Model is based on the stepwise forward regression method. Variables are added in a stepwise manner.
 
 ```{r}
-model_forward <- 
-  lm(TARGET_WINS ~
-TEAM_BATTING_H +
-TEAM_BASERUN_SB +
-TEAM_BATTING_HR.TEAM_BATTING_BB +
-TEAM_BATTING_2B.TEAM_BATTING_HR +
-TEAM_BATTING_BB.TEAM_FIELDING_E +
-TEAM_BATTING_HR.TEAM_BASERUN_SB +
-TEAM_BATTING_2B.TEAM_BATTING_3B +
-TEAM_BATTING_H.TEAM_BATTING_SO +
-TEAM_BATTING_2B.TEAM_FIELDING_E +
-TEAM_BATTING_3B.TEAM_BATTING_SO +
-TEAM_BATTING_3B.TEAM_PITCHING_SO +
-TEAM_BATTING_BB.TEAM_PITCHING_BB +
-TEAM_BATTING_HR.TEAM_FIELDING_E +
-TEAM_BATTING_2B.TEAM_PITCHING_H +
-TEAM_BATTING_H.TEAM_BATTING_BB +
-TEAM_BATTING_BB +
-TEAM_BATTING_BB.TEAM_BATTING_SO +
-TEAM_BASERUN_SB.TEAM_FIELDING_E +
-TEAM_BATTING_H.TEAM_PITCHING_H +
-TEAM_PITCHING_BB.TEAM_FIELDING_E+ 
-TEAM_BATTING_SO.TEAM_PITCHING_BB +
-TEAM_PITCHING_H +
-TEAM_BATTING_2B.TEAM_PITCHING_BB +
-TEAM_BATTING_2B +
-TEAM_BATTING_3B.TEAM_PITCHING_BB +
-TEAM_BATTING_BB.TEAM_BASERUN_SB +
-TEAM_BATTING_3B.TEAM_BASERUN_SB +
-TEAM_BATTING_BB.TEAM_PITCHING_SO +
-TEAM_BATTING_3B.TEAM_BATTING_BB +
-TEAM_BATTING_3B.TEAM_BATTING_HR +
-TEAM_BATTING_H.TEAM_PITCHING_BB +
-TEAM_PITCHING_HR.TEAM_PITCHING_SO+ 
-TEAM_BASERUN_SB.TEAM_PITCHING_HR +
-TEAM_BATTING_H.TEAM_BATTING_HR +
-TEAM_BATTING_3B.TEAM_FIELDING_E +
-TEAM_PITCHING_HR.TEAM_PITCHING_BB+ 
-TEAM_BASERUN_SB.TEAM_PITCHING_BB +
- TEAM_BATTING_BB.TEAM_PITCHING_HR +
- TEAM_BATTING_H.TEAM_FIELDING_E +
- TEAM_PITCHING_H.TEAM_PITCHING_BB+ 
- TEAM_BATTING_HR.TEAM_PITCHING_BB +
- TEAM_BATTING_2B.TEAM_BATTING_BB +
- TEAM_PITCHING_HR.TEAM_FIELDING_E +
- TEAM_BATTING_3B.TEAM_PITCHING_HR, knnOutput_int)
+ols_step_forward <- ols_step_forward_p(fit_knn_poly_int, details=F)
+summary(ols_step_forward$model)
 ```
-
-```{r}
-summary(model_forward)
-```
-
 **Conclusions based on model:**
 
-F-statistic is 44.32, Adj. R-Squared is 0.4559.  
+F-statistic is 27.01, Adj. R-Squared is 0.4839.  
 
-
+We can see that backward elimination and forward elimination perform virtually the same, although the features retained seem to be different.  Let's incorporate backward elimination into our cross-validation model setup, and look at performance. That way, we can determine which subset of our model actually works best on unseen data.
 
 ### 4. SELECT MODELS  
   

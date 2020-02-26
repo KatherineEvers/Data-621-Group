@@ -445,7 +445,7 @@ step_mice_model$results[as.numeric(step_mice_model$bestTune),]
 
 
 miceOutput_new_cols <- colnames(mice_train_Output_int_poly[colnames(mice_train_Output_int_poly) %in% rownames(as.matrix(coef(step_mice_model$finalModel, 
-                                                                                      as.numeric(step.model$bestTune))))])
+                                                                                      as.numeric(step_mice_model$bestTune))))])
 refined_mice_formula <- as.formula(paste(' Wins ~ ', paste(miceOutput_new_cols, collapse = ' + ')))
 refined_mice_formula
 ```
@@ -470,7 +470,7 @@ ggplot(step_mice_results,
 ```{r}
 # Train the model 
 refined_mice_model <- train(refined_mice_formula,  data=mice_train_Output_int_poly, method = "lm",
-                       trControl = train.control)
+                       trControl = train_control)
 # Summarize the results
 print(refined_mice_model)
 ```
@@ -497,10 +497,9 @@ normalize <- function(x) {
 
 # Train the model 
 refined_mice_model_norm <- train(refined_mice_formula,  data=normalize(mice_train_Output_int_poly), method = "lm",
-                       trControl = train.control)
+                                 trControl = train_control)
 # Summarize the results
 print(refined_mice_model_norm)
-
 ```
 
 ```{r}

@@ -250,7 +250,7 @@ autoplot(fit_knn_poly_int)
 Variables will be removed one by one to determine best fit model. After each variable is removed, the model will be run again - until the most optimal output (r2, f-stat) are produced.  The OLSRR library is used to determine the best fit variables for the backwards elimination.  The best variables are then selected and used in the model - rather than having the OLSRR function regenerate the list.
 
 ```{r}
-#ols_step_backward <- ols_step_backward_p(fit_knn_poly_int, details=F)
+ols_step_backward <- ols_step_backward_p(fit_knn_poly_int, details=F)
 summary(ols_step_backward$model)
 ```
 
@@ -263,8 +263,8 @@ F-statistic is 29.3, Adj. R-Squared is 0.4859.
 Model is based on the stepwise forward regression method. Variables are added in a stepwise manner.
 
 ```{r}
-ols_step_forward <- ols_step_forward_p(fit_knn_poly_int, details=F)
-summary(ols_step_forward$model)
+#ols_step_forward <- ols_step_forward_p(fit_knn_poly_int, details=F)
+#summary(ols_step_forward$model)
 ```
 **Conclusions based on model:**
 
@@ -296,7 +296,7 @@ As we can see, the model is very overfit. The problem stems from the fact that w
 step_model <- train(Wins ~ ., data = knnOutput_poly_int,
                     method = "leapBackward", 
                     tuneGrid = data.frame(nvmax = 5:ncol(knnOutput_poly_int)),
-                    trControl = train.control
+                    trControl = train_control
                     )
 step_model$results[as.numeric(step_model$bestTune),]
 ```
@@ -335,7 +335,7 @@ Let's run the refined model and look at our crossval score
 ```{r}
 # Train the model 
 refined_best_model <- train(refined_formula,  data=knnOutput_poly_int, method = "lm",
-                       trControl = train.control)
+                       trControl = train_control)
 # Summarize the results
 print(refined_best_model)
 ```
@@ -439,7 +439,7 @@ summary(fit_mice_int_poly) # show result
 step_mice_model <- train(Wins ~ ., data = mice_train_Output_int_poly,
                     method = "leapBackward", 
                     tuneGrid = data.frame(nvmax = 5:ncol(mice_train_Output_int_poly)),
-                    trControl = train.control
+                    trControl = train_control
                     )
 step_mice_model$results[as.numeric(step_mice_model$bestTune),]
 
@@ -512,13 +512,13 @@ summary(refined_mice_model_norm)
 Let's predict output on the test data. Note that we're not normalizing coefficients for the purpose of prediction
 
 ```{r}
-mice_test_Output_int_poly <- cbind(mice_test_Output$Wins,
-                                    data.frame(model.matrix(formula_int_poly, data=mice_test_Output)))
+
+mice_test_Output$Wins <- 'NA'
+mice_test_Output_int_poly <- data.frame(model.matrix(formula_int_poly, data=mice_test_Output))
 
 mice_test_Output_int_poly <- mice_test_Output_int_poly %>% 
                         rename(
-                          Wins = 'mice_test_Output$Wins',
-                          INTERCEPT = 'X.Intercept.',
+                          INTERCEPT = 'X.Intercept.'
                           ) 
                   
 mice_test_Output_int_poly <- select(mice_test_Output_int_poly,-c(INTERCEPT))

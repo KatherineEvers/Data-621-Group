@@ -368,8 +368,8 @@ knnOutput_test_poly_int <- data.frame(model.matrix(formula_int_poly, data=knnOut
 knnOutput_test_poly_int_pred <- predict(refined_best_model, knnOutput_test_poly_int,
                                         interval = "prediction")
 
-knnOutput_test$TARGET_WINS <- knnOutput_test_poly_int_pred
-knnOutput_test$TARGET_WINS
+knnOutput_test$Wins <- knnOutput_test_poly_int_pred
+knnOutput_test$Wins
 ```
 
 ### Mice Tranformations
@@ -505,5 +505,33 @@ print(refined_mice_model_norm)
 ```{r}
 summary(refined_mice_model_norm)
 ```
+
+
+### Final Prediction
+
+Let's predict output on the test data. Note that we're not normalizing coefficients for the purpose of prediction
+
+```{r}
+mice_test_Output_int_poly <- cbind(mice_test_Output$Wins,
+                                    data.frame(model.matrix(formula_int_poly, data=mice_test_Output)))
+
+mice_test_Output_int_poly <- mice_test_Output_int_poly %>% 
+                        rename(
+                          Wins = 'mice_test_Output$Wins',
+                          INTERCEPT = 'X.Intercept.',
+                          ) 
+                  
+mice_test_Output_int_poly <- select(mice_test_Output_int_poly,-c(INTERCEPT))
+```
+
+
+```{r}
+mice_test_poly_int_pred <- predict(refined_mice_model, mice_test_Output_int_poly,
+                                    interval = "prediction")
+
+mice_test_Output$Wins <- mice_test_poly_int_pred
+mice_test_Output$Wins
+```
+
 
 
